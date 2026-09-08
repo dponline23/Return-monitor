@@ -20,4 +20,27 @@ html,body{max-width:100%;overflow-x:hidden}.app,.pageHeader,.brandBlock,.headerA
 @media(max-width:760px){html,body{width:100%;max-width:100%;overflow-x:hidden}.app{width:100%;max-width:100%;padding:10px}.pageHeader,.brandBlock,.brandBlock>div:last-child,.headerActions,.statsGrid,.workspaceCard,.toolbar,.searchWrap,.filterPanel,.mobileCards,.returnCard{width:100%;max-width:100%;min-width:0}.brandBlock h1,.brandBlock p,.setupLine{overflow-wrap:anywhere}.headerActions{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.headerActions>*{min-width:0;max-width:100%}.periodBox{width:100%;min-width:0;max-width:100%;overflow:hidden;padding:0 8px;gap:4px}.periodBox input{flex:1 1 0;width:0;min-width:0;max-width:100%;padding:0;font-size:12px}.tabs{width:100%;max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}.toolbar{grid-template-columns:minmax(0,1fr) auto}.searchWrap{min-width:0}.searchWrap input{min-width:0;width:100%}.filterPanel>*{min-width:0}.statCard{min-width:0;overflow:hidden}.statCard>div:last-child{min-width:0}.statValue,.statLabel{overflow-wrap:anywhere}.mobileCards{overflow:hidden}.returnCard{min-width:0;overflow:hidden}.returnCard *{min-width:0}.cardTop{align-items:flex-start}.cardTop>*,.cardSupplier,.cardOrder,.cardProduct,.cardBottom{min-width:0;max-width:100%}.cardTop strong:last-child{white-space:nowrap;flex:0 0 auto}.productMini{width:100%;min-width:0}.productMini>div{min-width:0;max-width:100%}.productMini strong{white-space:normal;overflow-wrap:anywhere}.orderLink,.cellMeta,.detailMuted,.detailGrid strong,.detailGrid div{overflow-wrap:anywhere;word-break:break-word}.detailsDrawer{width:100%;max-width:100dvw;overflow-x:hidden}.drawerHead,.drawerBody{min-width:0;max-width:100%}.detailGrid{grid-template-columns:minmax(0,100px) minmax(0,1fr);width:100%}.detailGrid>*{min-width:0}.detailProduct{min-width:0;overflow:hidden}.detailProduct>div{min-width:0}.modal,.wideModal,.settingsModal{width:calc(100dvw - 12px);max-width:calc(100dvw - 12px);margin:auto;overflow-x:hidden}.modal form,.formSection,.formGrid,.field,.productInputs{min-width:0;max-width:100%}.field input,.field select,.field textarea{min-width:0;max-width:100%}}
 @media(max-width:430px){.app{padding:8px}.headerActions{grid-template-columns:1fr}.headerActions .primary,.periodBox{grid-column:1}.headerActions .btn{width:100%}.statsGrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.periodIcon{display:none}.periodBox{padding:0 6px}.periodBox input{font-size:11px}.toolbar{grid-template-columns:minmax(0,1fr) auto}.filterToggle{white-space:nowrap}.detailGrid{grid-template-columns:92px minmax(0,1fr);gap:9px 8px}}
 @media(max-width:350px){.statsGrid{grid-template-columns:1fr}.cardBottom{display:grid}}
+
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.detailSection>.modalActions.compact{position:static!important;bottom:auto!important;background:transparent!important;border-top:0!important;padding:12px 0 0!important;display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:start;gap:10px;justify-content:start}
+.detailSection>.modalActions.compact>.btn.primary{width:auto;min-height:38px;padding:8px 12px;font-size:12px;border-radius:10px;white-space:nowrap}
+.detailSection>.modalActions.compact>.btn.secondary{min-height:38px;padding:8px 10px;font-size:12px;white-space:normal}
+.detailSection>.modalActions.compact>div{min-width:0;display:grid;justify-items:start;gap:5px}
+.detailSection>.modalActions.compact>div .badge{white-space:normal}
+.detailSection>.modalActions.compact>div .smallBtn{width:auto;min-height:34px;margin-top:0}
+@media(max-width:760px){
+  .brandBlock h1{font-size:20px;line-height:1.1}.brandBlock p{font-size:12px;line-height:1.35}.setupLine{font-size:11px}
+  .headerActions{display:grid;grid-template-columns:minmax(0,1fr) 44px minmax(0,1fr);gap:8px}
+  .periodBox{grid-column:1/-1!important;height:40px;border-radius:10px;display:grid;grid-template-columns:auto minmax(0,1fr) 12px minmax(0,1fr);align-items:center;padding:0 8px;gap:4px}
+  .periodBox::before{content:'Період';font-size:11px;font-weight:700;color:var(--muted);margin-right:2px}
+  .periodIcon{display:none}.periodDash{text-align:center}.periodBox input{height:34px;font-size:11px;min-width:0;padding:0 2px;width:100%;max-width:100%}
+  .headerActions>.btn{width:100%;min-height:40px;padding:7px 9px;border-radius:10px;font-size:12px;white-space:nowrap}
+  .headerActions>.btn:nth-of-type(1){grid-column:1}.headerActions>.iconOnlyDesktop{grid-column:2;width:44px;padding:0}.headerActions>.primary{grid-column:3!important;font-size:0;padding:0 8px}
+  .headerActions>.primary::after{content:'+ Додати';font-size:12px}.iconOnlyDesktop span{display:none}
+}
+@media(max-width:390px){
+  .headerActions{grid-template-columns:minmax(0,1fr) 42px minmax(0,1fr)}
+  .headerActions>.primary::after{content:'+';font-size:20px}.periodBox::before{content:'';display:none}.periodBox{grid-template-columns:minmax(0,1fr) 10px minmax(0,1fr)}
+}
+@media(max-width:380px){.detailSection>.modalActions.compact{grid-template-columns:1fr}.detailSection>.modalActions.compact>.btn.primary{justify-self:start}}
 </style>
