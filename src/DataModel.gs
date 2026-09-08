@@ -9,9 +9,9 @@ function rowToObject_(row,rowNumber){
   const result={rowNumber:rowNumber};
   RETURN_FIELDS.forEach((field,index)=>{ result[field.key]=row[index]; });
   ['amount'].forEach(key=>result[key]=Number(result[key]||0));
-  ['supplierPickedUp'].forEach(key=>result[key]=toBool_(result[key]));
-  ['supplierPickedUpAt','returnDate','createdAt','updatedAt','orderDate','returnStartedAt','arrivedAt'].forEach(key=>result[key]=dateIso_(result[key]));
-  RETURN_KEYS.filter(key=>!['amount','supplierPickedUp','supplierPickedUpAt','returnDate','createdAt','updatedAt','orderDate','returnStartedAt','arrivedAt'].includes(key))
+  ['supplierPickedUp','supplierNotified'].forEach(key=>result[key]=toBool_(result[key]));
+  ['supplierPickedUpAt','supplierNotifiedAt','returnDate','createdAt','updatedAt','orderDate','returnStartedAt','arrivedAt'].forEach(key=>result[key]=dateIso_(result[key]));
+  RETURN_KEYS.filter(key=>!['amount','supplierPickedUp','supplierNotified','supplierPickedUpAt','supplierNotifiedAt','returnDate','createdAt','updatedAt','orderDate','returnStartedAt','arrivedAt'].includes(key))
     .forEach(key=>result[key]=String(result[key]||''));
   return normalizeReturnState_(result,false);
 }
@@ -21,8 +21,8 @@ function objectToRow_(input){
   return RETURN_FIELDS.map(field=>{
     const key=field.key;
     if(key==='amount') return Number(o[key]||0);
-    if(key==='supplierPickedUp') return Boolean(o[key]);
-    if(['supplierPickedUpAt','returnDate','createdAt','updatedAt','orderDate','returnStartedAt','arrivedAt'].includes(key)) return parseDate_(o[key]);
+    if(key==='supplierPickedUp'||key==='supplierNotified') return Boolean(o[key]);
+    if(['supplierPickedUpAt','supplierNotifiedAt','returnDate','createdAt','updatedAt','orderDate','returnStartedAt','arrivedAt'].includes(key)) return parseDate_(o[key]);
     return o[key]===undefined||o[key]===null?'':o[key];
   });
 }
