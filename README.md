@@ -21,22 +21,22 @@ Script ID: `1kJJ4wr_MrxQm8gQWfM43uV5aVw2Pdvze2CFpr5hsoi6lsncI-qEF6dOi`
 ```powershell
 git clone https://github.com/dponline23/Return-monitor.git
 cd Return-monitor
-npm ci
+npm install
 npm run clasp:config
-npm run pull
 ```
 
 Якщо `clasp` уже авторизований на цьому ПК для Dropario, повторний `clasp login` не потрібен.
 
-Після правок:
+GitHub є джерелом актуального коду. Після локальних правок достатньо:
 
 ```powershell
 git pull
-npm run push
 git add .
 git commit -m "Update Return Monitor"
 git push
 ```
+
+Після `git push` GitHub Actions сам виконає `clasp push --force`. `clasp pull` використовувати тільки якщо код навмисно змінювався безпосередньо в Apps Script.
 
 `.clasp.json` створюється локально і не комітиться.
 
@@ -44,7 +44,7 @@ git push
 
 Workflow `.github/workflows/deploy.yml` на кожен push у `main`:
 
-1. встановлює залежності;
+1. встановлює clasp;
 2. створює тимчасовий `.clasp.json`;
 3. відновлює авторизацію clasp із GitHub Secret `CLASPRC_JSON`;
 4. виконує `clasp push --force`;
