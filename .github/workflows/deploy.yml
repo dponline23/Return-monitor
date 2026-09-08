@@ -1,0 +1,56 @@
+name: Deploy Return Monitor
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'package.json'
+      - '.github/workflows/deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: return-monitor-apps-script-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install clasp
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Configure Google authorization
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ]; then
+            echo "Missing GitHub Actions secret CLASPRC_JSON"
+            exit 1
+          fi
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+          npm run clasp:config
+
+      - name: Push Apps Script and update web app
+        env:
+          RETURN_MONITOR_DEPLOYMENT_ID: ${{ vars.RETURN_MONITOR_DEPLOYMENT_ID }}
+        run: node scripts/deploy.cjs
+
+      - name: Remove temporary authorization
+        if: always()
+        run: |
+          rm -f "$HOME/.clasprc.json" .clasp.json
