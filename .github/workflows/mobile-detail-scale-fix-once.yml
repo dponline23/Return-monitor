@@ -2,9 +2,8 @@ name: Mobile detail scale fix once
 
 on:
   push:
-    branches: [main]
-    paths:
-      - '.github/workflows/mobile-detail-scale-fix-once.yml'
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -13,43 +12,30 @@ jobs:
   patch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Apply compact mobile detail sizing
-        shell: bash
+      - name: Append compact sizing overrides
         run: |
-          cat >> src/Styles.html <<'EOF'
+          printf '%s\n' '<style>' >> src/Styles.html
+          printf '%s\n' '.refCopyAll,.refNotifyBtn,.refCancel,.refBackList{display:flex;align-items:center;justify-content:center;gap:7px}' >> src/Styles.html
+          printf '%s\n' '.refCopyAll svg,.refNotifyBtn svg,.refCancel svg,.refBackList svg{width:16px!important;height:16px!important;min-width:16px;max-width:16px;flex:0 0 16px}' >> src/Styles.html
+          printf '%s\n' '.refCopyAll,.refNotifyBtn{min-height:42px!important;padding:8px 12px!important;font-size:13px!important;line-height:1.2}' >> src/Styles.html
+          printf '%s\n' '.refNotifyState{min-height:42px;padding:8px 10px}' >> src/Styles.html
+          printf '%s\n' '.refNotifyState svg{width:18px!important;height:18px!important;flex:0 0 18px}' >> src/Styles.html
+          printf '%s\n' '.refCancel{min-height:38px!important;padding:7px 10px!important;font-size:12px!important;line-height:1.2}' >> src/Styles.html
+          printf '%s\n' '.refPickupBox{grid-template-columns:42px minmax(0,1fr);gap:10px;padding:12px;border-radius:13px}' >> src/Styles.html
+          printf '%s\n' '.refPickupIcon{width:38px;height:38px}.refPickupIcon svg{width:20px!important;height:20px!important}' >> src/Styles.html
+          printf '%s\n' '.refPickupBox strong{font-size:13px;line-height:1.25;margin-bottom:3px}.refPickupBox span{font-size:11px;line-height:1.38}' >> src/Styles.html
+          printf '%s\n' '.refPickupBox .pickupAction{min-height:40px;margin-top:3px;padding:8px 10px;font-size:12px}' >> src/Styles.html
+          printf '%s\n' '.refBackList{min-height:40px!important;padding:8px 12px!important;font-size:12px!important}' >> src/Styles.html
+          printf '%s\n' '@media(max-width:430px){.refSupplierActions{gap:8px;margin-top:10px}.refCopyAll,.refNotifyBtn{min-height:40px!important;padding:7px 9px!important;font-size:12px!important}.refCancel{min-height:36px!important;padding:6px 9px!important;font-size:11px!important}.refPickupBox{grid-template-columns:38px minmax(0,1fr);gap:9px;padding:11px}.refPickupIcon{width:36px;height:36px}.refPickupIcon svg{width:19px!important;height:19px!important}.refBackList{min-height:38px!important;font-size:11px!important}}' >> src/Styles.html
+          printf '%s\n' '</style>' >> src/Styles.html
 
-<style>
-/* Compact sizing to match approved mobile return-detail reference */
-.refCopyAll,.refNotifyBtn,.refCancel,.refBackList{display:flex;align-items:center;justify-content:center;gap:7px}
-.refCopyAll svg,.refNotifyBtn svg,.refCancel svg,.refBackList svg{width:16px!important;height:16px!important;min-width:16px;max-width:16px;flex:0 0 16px}
-.refCopyAll,.refNotifyBtn{min-height:42px!important;padding:8px 12px!important;font-size:13px!important;line-height:1.2}
-.refNotifyState{min-height:42px;padding:8px 10px}
-.refNotifyState svg{width:18px!important;height:18px!important;flex:0 0 18px}
-.refCancel{min-height:38px!important;padding:7px 10px!important;font-size:12px!important;line-height:1.2}
-.refPickupBox{grid-template-columns:42px minmax(0,1fr);gap:10px;padding:12px;border-radius:13px}
-.refPickupIcon{width:38px;height:38px}
-.refPickupIcon svg{width:20px!important;height:20px!important}
-.refPickupBox strong{font-size:13px;line-height:1.25;margin-bottom:3px}
-.refPickupBox span{font-size:11px;line-height:1.38}
-.refPickupBox .pickupAction{min-height:40px;margin-top:3px;padding:8px 10px;font-size:12px}
-.refBackList{min-height:40px!important;padding:8px 12px!important;font-size:12px!important}
-@media(max-width:430px){
-  .refSupplierActions{gap:8px;margin-top:10px}
-  .refCopyAll,.refNotifyBtn{min-height:40px!important;padding:7px 9px!important;font-size:12px!important}
-  .refCancel{min-height:36px!important;padding:6px 9px!important;font-size:11px!important}
-  .refPickupBox{grid-template-columns:38px minmax(0,1fr);gap:9px;padding:11px}
-  .refPickupIcon{width:36px;height:36px}
-  .refPickupIcon svg{width:19px!important;height:19px!important}
-  .refBackList{min-height:38px!important;font-size:11px!important}
-}
-</style>
-EOF
-
-          rm -f .github/workflows/mobile-detail-scale-fix-once.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/Styles.html .github/workflows/mobile-detail-scale-fix-once.yml
-          git commit -m "Compact mobile return detail controls"
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/Styles.html
+          git commit -m 'Compact mobile return detail controls'
           git push
