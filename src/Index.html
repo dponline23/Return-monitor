@@ -7,118 +7,483 @@
 </head>
 <body>
 <div class="app" id="app">
-  <div class="top">
-    <div><div class="title">Повернення — контроль</div><div class="sub" id="setupLine">Завантаження…</div></div>
-    <div class="actions"><button class="btn" onclick="openSalesDriveSettings()">Налаштування</button><button class="btn" onclick="loadData()">Оновити</button><button class="btn primary" onclick="syncNow()">Синхронізувати</button></div>
-  </div>
+  <header class="pageHeader">
+    <div class="brandBlock">
+      <div class="brandIcon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
+      </div>
+      <div>
+        <h1>Відстеження повернень</h1>
+        <p>Контроль повернень та отримання їх постачальниками</p>
+        <div class="setupLine" id="setupLine">Завантаження…</div>
+      </div>
+    </div>
+    <div class="headerActions">
+      <div class="periodBox" title="Період повернення">
+        <span class="periodIcon">⌗</span>
+        <input type="date" id="periodFrom" onchange="renderAll()" aria-label="Період від">
+        <span class="periodDash">—</span>
+        <input type="date" id="periodTo" onchange="renderAll()" aria-label="Період до">
+      </div>
+      <button class="btn secondary" type="button" onclick="openSettings()">Налаштування</button>
+      <button class="btn secondary iconOnlyDesktop" type="button" onclick="syncNow()" title="Синхронізувати">↻ <span>Синхронізувати</span></button>
+      <button class="btn primary" type="button" onclick="openReturnForm()">+ Додати повернення</button>
+    </div>
+  </header>
+
   <div class="error" id="error"></div>
-  <div class="kpis" id="kpis"></div>
-  <div class="tabs" id="tabs"></div>
-  <div class="toolbar"><input class="search" id="search" placeholder="Пошук: № замовлення, ТТН, постачальник, товар" oninput="renderRows()"></div>
-  <div class="table" id="table"></div>
+
+  <section class="statsGrid" aria-label="Статистика">
+    <article class="statCard">
+      <div class="statIcon green">▣</div>
+      <div><div class="statValue" id="statTotal">0</div><div class="statLabel">Усього повернень</div><div class="statHint">за вибраний період</div></div>
+    </article>
+    <article class="statCard">
+      <div class="statIcon amber">◷</div>
+      <div><div class="statValue" id="statWaiting">0</div><div class="statLabel">Очікують</div><div class="statHint">потребують контролю</div></div>
+    </article>
+    <article class="statCard">
+      <div class="statIcon green">✓</div>
+      <div><div class="statValue" id="statPicked">0</div><div class="statLabel">Забрано постачальником</div><div class="statHint">фактично отримано</div></div>
+    </article>
+    <article class="statCard">
+      <div class="statIcon neutral">₴</div>
+      <div><div class="statValue" id="statAmount">0 ₴</div><div class="statLabel">Сума повернень</div><div class="statHint">за вибраний період</div></div>
+    </article>
+  </section>
+
+  <section class="workspaceCard">
+    <div class="tabs" id="tabs"></div>
+
+    <div class="toolbar">
+      <div class="searchWrap">
+        <span>⌕</span>
+        <input id="search" placeholder="Пошук за № повернення, замовленням, постачальником, товаром…" oninput="renderRows()">
+      </div>
+      <button class="btn secondary filterToggle" type="button" onclick="toggleFilters()">▽ Фільтри <span class="filterDot" id="filterDot"></span></button>
+    </div>
+
+    <div class="filterPanel" id="filterPanel">
+      <label><span>Статус повернення</span><select id="filterStatus" onchange="renderRows()"></select></label>
+      <label><span>Постачальник</span><select id="filterSupplier" onchange="renderRows()"></select></label>
+      <label><span>Причина</span><select id="filterReason" onchange="renderRows()"></select></label>
+      <label><span>Забір постачальником</span><select id="filterPickup" onchange="renderRows()"></select></label>
+      <button class="resetFilters" type="button" onclick="resetFilters()">↶ Скинути фільтри</button>
+    </div>
+
+    <div class="desktopTable" id="desktopTable"></div>
+    <div class="mobileCards" id="mobileCards"></div>
+    <div class="listFooter" id="listFooter"></div>
+  </section>
 </div>
 
-<dialog id="salesDriveDialog" class="dialog">
-  <form onsubmit="saveSalesDriveSettings(event)">
-    <div class="dialogHead"><div><div class="dialogEyebrow">SalesDrive · API</div><h2>Підключення замовлень</h2></div><button class="iconBtn" type="button" onclick="closeSalesDriveSettings()">×</button></div>
-    <p class="dialogText">Використовується API бази заявок. Ключ зберігається у Script Properties цього Apps Script і не записується в Google Sheet або GitHub.</p>
-    <label class="field"><span>Субдомен</span><input id="salesDriveSubdomain" autocomplete="off" placeholder="techwolves"></label>
-    <label class="field"><span>API-ключ заявок</span><input id="salesDriveApiKey" type="password" autocomplete="new-password" placeholder="Залиште порожнім, щоб не змінювати"></label>
-    <div class="dialogStatus" id="salesDriveStatus">Не налаштовано</div>
-    <div class="dialogActions"><button class="btn" type="button" onclick="testSalesDrive()">Перевірити</button><button class="btn primary" type="submit">Зберегти</button></div>
+<div class="drawerBackdrop" id="drawerBackdrop" onclick="closeDetails()"></div>
+<aside class="detailsDrawer" id="detailsDrawer" aria-hidden="true">
+  <div class="drawerHead">
+    <div><div class="eyebrow">Деталі повернення</div><h2 id="detailNumber">—</h2></div>
+    <button class="closeBtn" type="button" onclick="closeDetails()">×</button>
+  </div>
+  <div class="drawerBody" id="drawerBody"></div>
+</aside>
+
+<dialog id="returnDialog" class="modal wideModal">
+  <form id="returnForm" onsubmit="saveReturnForm(event)">
+    <div class="modalHead">
+      <div><div class="eyebrow" id="returnFormEyebrow">Нове повернення</div><h2 id="returnFormTitle">Додати повернення</h2></div>
+      <button class="closeBtn" type="button" onclick="closeReturnForm()">×</button>
+    </div>
+    <input type="hidden" id="returnId">
+    <input type="hidden" id="existingProductImage">
+
+    <div class="formSection">
+      <h3>Постачальник і замовлення</h3>
+      <div class="formGrid two">
+        <label class="field"><span>Постачальник *</span><select id="formSupplier" required></select></label>
+        <label class="field"><span>№ замовлення постачальника</span><input id="formSupplierOrder" autocomplete="off" placeholder="Напр. 12847"></label>
+      </div>
+      <label class="field"><span>Посилання на замовлення</span><input id="formSupplierOrderUrl" type="url" autocomplete="off" placeholder="https://..."></label>
+    </div>
+
+    <div class="formSection">
+      <h3>Повернення</h3>
+      <div class="formGrid two">
+        <label class="field"><span>Причина</span><select id="formReason" onchange="toggleOtherReason()"></select></label>
+        <label class="field"><span>Сума, ₴</span><input id="formAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
+        <label class="field"><span>Статус повернення</span><select id="formStatus"></select></label>
+        <label class="field"><span>Дата повернення</span><input id="formReturnDate" type="datetime-local"></label>
+      </div>
+      <label class="field hidden" id="otherReasonField"><span>Короткий коментар до причини</span><input id="formReasonComment" maxlength="160" placeholder="Уточнення"></label>
+    </div>
+
+    <div class="formSection">
+      <h3>Товар <span class="optional">необов'язково</span></h3>
+      <div class="productFormRow">
+        <div class="imagePreview" id="imagePreview"><span>Фото</span></div>
+        <div class="productInputs">
+          <label class="field"><span>Назва товару</span><input id="formProductName" autocomplete="off" placeholder="Назва товару"></label>
+          <label class="field fileField"><span>Одне фото</span><input id="formProductImageFile" type="file" accept="image/png,image/jpeg,image/webp" onchange="previewImageFile()"><small>PNG/JPG/WEBP, до 3 МБ</small></label>
+        </div>
+      </div>
+      <label class="field"><span>Примітка</span><textarea id="formNote" rows="2" maxlength="400" placeholder="Необов'язково"></textarea></label>
+    </div>
+
+    <div class="modalActions">
+      <button class="btn secondary" type="button" onclick="closeReturnForm()">Скасувати</button>
+      <button class="btn primary" type="submit">Зберегти повернення</button>
+    </div>
   </form>
 </dialog>
 
-<script>
-let model={rows:[],counts:{returning:0,arrived:0,waiting:0,closed:0}},active:'returning';
-const labels={returning:'Повертаються',arrived:'Приїхали',waiting:'Очікують постачальника',closed:'Закриті'};
+<dialog id="settingsDialog" class="modal settingsModal">
+  <div class="modalHead">
+    <div><div class="eyebrow">Налаштування</div><h2>Підключення та довідники</h2></div>
+    <button class="closeBtn" type="button" onclick="closeSettings()">×</button>
+  </div>
+  <div class="settingsTabs">
+    <button type="button" class="settingsTab active" data-settings-tab="suppliers" onclick="setSettingsTab('suppliers')">Постачальники</button>
+    <button type="button" class="settingsTab" data-settings-tab="salesdrive" onclick="setSettingsTab('salesdrive')">SalesDrive</button>
+  </div>
 
-function call(name,args,onSuccess){
-  document.getElementById('app').classList.add('loader');
-  const runner=google.script.run.withSuccessHandler(v=>{document.getElementById('app').classList.remove('loader');hideError();onSuccess(v);}).withFailureHandler(e=>{document.getElementById('app').classList.remove('loader');showError(e&&e.message?e.message:String(e));});
+  <section class="settingsPane active" id="settingsSuppliers">
+    <p class="settingsText">Постачальник вибирається з довідника — не потрібно вводити його вручну в кожному поверненні.</p>
+    <form class="addSupplierRow" onsubmit="addSupplier(event)">
+      <input id="newSupplierName" placeholder="Назва постачальника" autocomplete="off">
+      <button class="btn primary" type="submit">+ Додати</button>
+    </form>
+    <div class="supplierList" id="supplierList"></div>
+  </section>
+
+  <section class="settingsPane" id="settingsSalesdrive">
+    <form onsubmit="saveSalesDriveSettings(event)">
+      <p class="settingsText">API-ключ зберігається у Script Properties і не потрапляє в Google Sheet або GitHub.</p>
+      <label class="field"><span>Субдомен</span><input id="salesDriveSubdomain" autocomplete="off" placeholder="techwolves"></label>
+      <label class="field"><span>API-ключ заявок</span><input id="salesDriveApiKey" type="password" autocomplete="new-password" placeholder="Залиште порожнім, щоб не змінювати"></label>
+      <div class="settingsStatus" id="salesDriveStatus">Не налаштовано</div>
+      <div class="modalActions compact">
+        <button class="btn secondary" type="button" onclick="testSalesDrive()">Перевірити</button>
+        <button class="btn primary" type="submit">Зберегти</button>
+      </div>
+    </form>
+  </section>
+</dialog>
+
+<div class="toast" id="toast"></div>
+<div class="busyOverlay" id="busyOverlay"><div class="spinner"></div><div id="busyText">Завантаження…</div></div>
+
+<script>
+let model={rows:[],counts:{all:0,waiting:0,arrived:0,pickup:0,picked:0},stats:{total:0,waiting:0,picked:0,amount:0},suppliers:[],reasons:[],config:{returnStatuses:[],pickupStatuses:[]},setup:{}};
+let activeTab='all';
+let selectedId='';
+let editingId='';
+
+const tabLabels={all:'Усі',waiting:'Очікують',arrived:'Прибули',pickup:'Очікують забору',picked:'Забрано'};
+
+function call(name,args,onSuccess,busyText){
+  setBusy(true,busyText||'Завантаження…');
+  const runner=google.script.run
+    .withSuccessHandler(value=>{setBusy(false);hideError();if(onSuccess)onSuccess(value);})
+    .withFailureHandler(error=>{setBusy(false);showError(error&&error.message?error.message:String(error));});
   if(args===undefined) runner[name](); else runner[name](args);
 }
-function loadData(){call('apiDashboard',undefined,data=>{model=data;render();});}
-function syncNow(){call('apiSync',undefined,()=>loadData());}
-function setTab(name){model.active=name;renderTabs();renderRows();}
-function render(){renderKpis();renderTabs();renderRows();renderSetup();}
-function renderKpis(){
-  const c=model.counts||{};
-  document.getElementById('kpis').innerHTML=['returning','arrived','waiting','closed'].map(k=>`<div class="kpi"><b>${c[k]||0}</b><span>${labels[k]}</span></div>`).join('');
+
+function loadData(){call('apiDashboard',undefined,data=>{model=data||model;renderAll();},'Завантаження повернень…');}
+function syncNow(){call('apiSync',undefined,data=>{model=data||model;renderAll();toast('Синхронізацію завершено');},'Синхронізація…');}
+
+function renderAll(){
+  renderSetup();
+  renderStats();
+  renderTabs();
+  renderFilterOptions();
+  renderRows();
+  if(selectedId) renderDetails();
 }
-function renderTabs(){
-  const c=model.counts||{};
-  document.getElementById('tabs').innerHTML=['returning','arrived','waiting','closed'].map(k=>`<button class="tab ${model.active===k?'active':''}" onclick="setTab('${k}')">${labels[k]} · ${c[k]||0}</button>`).join('');
-}
+
 function renderSetup(){
   const s=model.setup||{};
-  const ok=[]; if(s.salesDrive)ok.push('SalesDrive'); if(s.novaPoshta)ok.push('НП'); if(s.ukrposhta)ok.push('Укрпошта'); if(s.prom)ok.push('Prom');
-  document.getElementById('setupLine').textContent=ok.length?'Підключено: '+ok.join(' · '):'API ще не налаштовані';
+  const active=[];
+  if(s.salesDrive)active.push('SalesDrive');
+  if(s.novaPoshta)active.push('НП');
+  if(s.ukrposhta)active.push('Укрпошта');
+  if(s.prom)active.push('Prom');
+  document.getElementById('setupLine').textContent=active.length?'Підключено: '+active.join(' · ')+' · автооновлення щогодини':'API ще не налаштовані · ручні повернення доступні';
 }
-function renderRows(){
+
+function filteredRows(ignoreTab){
   const q=(document.getElementById('search').value||'').toLowerCase().trim();
-  let rows=(model.rows||[]).filter(r=>r.bucket===model.active);
-  if(q) rows=rows.filter(r=>[r.orderNumber,r.ttn,r.supplier,r.supplierOrder,r.product,r.sku,r.customer].join(' ').toLowerCase().includes(q));
-  const table=document.getElementById('table');
-  const head='<div class="row head"><div>Замовлення</div><div>Товар / клієнт</div><div>Доставка</div><div>Статус</div><div>Постачальник</div><div>Дія</div></div>';
-  if(!rows.length){table.innerHTML=head+'<div class="empty">Немає повернень у цьому розділі</div>';return;}
-  table.innerHTML=head+rows.map(rowHtml).join('');
+  const status=document.getElementById('filterStatus').value;
+  const supplier=document.getElementById('filterSupplier').value;
+  const reason=document.getElementById('filterReason').value;
+  const pickup=document.getElementById('filterPickup').value;
+  const from=document.getElementById('periodFrom').value;
+  const to=document.getElementById('periodTo').value;
+  let rows=(model.rows||[]).slice();
+  if(!ignoreTab&&activeTab!=='all') rows=rows.filter(row=>matchesTab(row,activeTab));
+  if(q) rows=rows.filter(row=>[row.returnNumber,row.supplierOrderNumber,row.supplierName,row.productName,row.orderNumber,row.ttn].join(' ').toLowerCase().includes(q));
+  if(status) rows=rows.filter(row=>row.returnStatus===status);
+  if(supplier) rows=rows.filter(row=>row.supplierId===supplier);
+  if(reason) rows=rows.filter(row=>row.returnReason===reason);
+  if(pickup) rows=rows.filter(row=>row.supplierPickupStatus===pickup);
+  if(from||to){
+    rows=rows.filter(row=>{
+      const dateValue=row.returnDate||row.arrivedAt||row.returnStartedAt||row.createdAt||row.orderDate;
+      if(!dateValue) return false;
+      const day=localDateKey(dateValue);
+      if(from&&day<from) return false;
+      if(to&&day>to) return false;
+      return true;
+    });
+  }
+  return rows;
 }
-function rowHtml(r){
-  const wait=r.daysWaiting?` · ${r.daysWaiting} дн.`:'';
-  const statusClass=r.bucket==='closed'?'ok':(r.daysWaiting>=3?'warn':'');
-  return `<div class="row">
-    <div class="main"><b>№${esc(r.orderNumber||r.salesDriveId)}</b><div class="meta">${fmtDate(r.orderDate)}</div></div>
-    <div class="main"><b>${esc(r.product||'—')}</b><div class="meta">${esc(r.sku||'')} ${r.customer?'· '+esc(r.customer):''}</div></div>
-    <div><b>${esc(r.carrier||'—')}</b><div class="meta">${esc(r.ttn||'—')}</div></div>
-    <div class="status ${statusClass}">${esc(r.deliveryStatus||'—')}<div class="meta">${r.arrivedAt?'Прибуло '+fmtDate(r.arrivedAt):''}${wait}</div></div>
-    <div class="edit"><input id="s${r.rowNumber}" value="${attr(r.supplier)}" placeholder="Постачальник"><input id="o${r.rowNumber}" value="${attr(r.supplierOrder)}" placeholder="№ у постачальника"></div>
-    <div><button class="btn small" onclick="saveSupplier(${r.rowNumber})">Зберегти</button> ${r.supplierTaken?'<button class="btn small" onclick="markTaken('+r.rowNumber+',false)">Повернути в роботу</button>':'<button class="btn small primary" onclick="markTaken('+r.rowNumber+',true)">✓ Забрано</button>'}</div>
+
+function matchesTab(row,tab){
+  if(tab==='waiting') return !row.supplierPickedUp&&row.returnStatus!=='completed'&&row.returnStatus!=='cancelled';
+  if(tab==='arrived') return !row.supplierPickedUp&&row.returnStatus==='arrived';
+  if(tab==='pickup') return !row.supplierPickedUp&&row.supplierPickupStatus==='waiting_pickup';
+  if(tab==='picked') return Boolean(row.supplierPickedUp);
+  return true;
+}
+
+function renderStats(){
+  const rows=filteredRows(true);
+  const total=rows.length;
+  const waiting=rows.filter(row=>matchesTab(row,'waiting')).length;
+  const picked=rows.filter(row=>row.supplierPickedUp).length;
+  const amount=rows.reduce((sum,row)=>sum+Number(row.amount||0),0);
+  document.getElementById('statTotal').textContent=total;
+  document.getElementById('statWaiting').textContent=waiting;
+  document.getElementById('statPicked').textContent=picked;
+  document.getElementById('statAmount').textContent=money(amount);
+}
+
+function renderTabs(){
+  const rows=filteredRows(true);
+  const counts={all:rows.length,waiting:0,arrived:0,pickup:0,picked:0};
+  ['waiting','arrived','pickup','picked'].forEach(tab=>counts[tab]=rows.filter(row=>matchesTab(row,tab)).length);
+  document.getElementById('tabs').innerHTML=Object.keys(tabLabels).map(tab=>`<button class="tab ${activeTab===tab?'active':''}" onclick="setTab('${tab}')">${tabLabels[tab]} <span>${counts[tab]||0}</span></button>`).join('');
+}
+
+function setTab(tab){activeTab=tab;renderTabs();renderRows();}
+
+function renderFilterOptions(){
+  setSelectOptions('filterStatus','Усі статуси',(model.config.returnStatuses||[]).map(item=>[item.id,item.label]));
+  setSelectOptions('filterSupplier','Усі постачальники',(model.suppliers||[]).map(item=>[item.id,item.name]));
+  setSelectOptions('filterReason','Усі причини',(model.reasons||[]).map(item=>[item.id,item.name]));
+  setSelectOptions('filterPickup','Усі варіанти',(model.config.pickupStatuses||[]).map(item=>[item.id,item.label]));
+  setSelectOptions('formSupplier','Оберіть постачальника',(model.suppliers||[]).map(item=>[item.id,item.name]),true);
+  setSelectOptions('formReason','Не вказано',(model.reasons||[]).map(item=>[item.id,item.name]));
+  setSelectOptions('formStatus','Оберіть статус',(model.config.returnStatuses||[]).map(item=>[item.id,item.label]),true);
+  renderSupplierList();
+  updateFilterDot();
+}
+
+function setSelectOptions(id,firstLabel,items,required){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const current=el.value;
+  const firstValue=required?'':'';
+  el.innerHTML=`<option value="${firstValue}">${esc(firstLabel)}</option>`+items.map(item=>`<option value="${attr(item[0])}">${esc(item[1])}</option>`).join('');
+  if(items.some(item=>String(item[0])===current))el.value=current;
+}
+
+function renderRows(){
+  updateFilterDot();
+  const rows=filteredRows(false);
+  const head=`<div class="tableRow tableHead"><div class="checkCell"><input type="checkbox" disabled aria-label="Вибрати всі"></div><div>№ повернення</div><div>Замовлення</div><div>Постачальник</div><div>Товар</div><div>Причина</div><div>Статус</div><div>Забір</div><div class="right">Сума</div><div>Дата</div><div></div></div>`;
+  document.getElementById('desktopTable').innerHTML=head+(rows.length?rows.map(desktopRowHtml).join(''):`<div class="emptyState">${emptyStateHtml()}</div>`);
+  document.getElementById('mobileCards').innerHTML=rows.length?rows.map(mobileCardHtml).join(''):`<div class="emptyState mobileEmpty">${emptyStateHtml()}</div>`;
+  document.getElementById('listFooter').textContent=rows.length?'Показано '+rows.length+' '+plural(rows.length,'повернення','повернення','повернень'):'';
+}
+
+function desktopRowHtml(row){
+  const reason=reasonLabel(row.returnReason,row.returnReasonComment);
+  const product=productMini(row);
+  const order=orderLink(row);
+  const pickup=pickupCell(row);
+  return `<div class="tableRow dataRow ${selectedId===row.id?'selected':''}" onclick="openDetails('${jsq(row.id)}')">
+    <div class="checkCell" onclick="event.stopPropagation()"><input type="checkbox" aria-label="Вибрати ${attr(row.returnNumber)}"></div>
+    <div><strong>${esc(row.returnNumber||'—')}</strong><div class="cellMeta">${esc(sourceLabel(row.source))}</div></div>
+    <div>${order}</div>
+    <div><strong>${esc(row.supplierName||'—')}</strong></div>
+    <div>${product}</div>
+    <div><span class="reasonPill">${esc(reason||'—')}</span></div>
+    <div>${statusBadge(row.returnStatus)}</div>
+    <div>${pickup}</div>
+    <div class="right moneyCell">${money(row.amount)}</div>
+    <div>${dateCell(row.returnDate||row.arrivedAt||row.returnStartedAt)}</div>
+    <div class="actionsCell" onclick="event.stopPropagation()"><button class="dotsBtn" type="button" onclick="openDetails('${jsq(row.id)}')">•••</button></div>
   </div>`;
 }
-function saveSupplier(row){call('apiUpdateSupplier',{rowNumber:row,supplier:document.getElementById('s'+row).value,supplierOrder:document.getElementById('o'+row).value},data=>{model=data;render();});}
-function markTaken(row,taken){call('apiMarkTaken',{rowNumber:row,taken:taken},data=>{model=data;render();});}
 
-function openSalesDriveSettings(){
+function mobileCardHtml(row){
+  return `<article class="returnCard" onclick="openDetails('${jsq(row.id)}')">
+    <div class="cardTop"><strong>${esc(row.returnNumber||'—')}</strong><strong>${money(row.amount)}</strong></div>
+    <div class="cardSupplier">${esc(row.supplierName||'Постачальник не вказаний')}</div>
+    <div class="cardOrder">${orderLink(row)}</div>
+    ${row.productName?`<div class="cardProduct">${productMini(row)}</div>`:''}
+    <div class="cardBadges"><span class="reasonPill">${esc(reasonLabel(row.returnReason,row.returnReasonComment)||'Причина не вказана')}</span>${statusBadge(row.returnStatus)}${pickupBadge(row.supplierPickupStatus)}</div>
+    <div class="cardBottom"><span>${fmtDateTimeShort(row.returnDate||row.arrivedAt||row.returnStartedAt)}</span>${row.supplierPickedUp?`<span class="pickedTime">Забрано ${fmtDateTimeShort(row.supplierPickedUpAt)}</span>`:''}</div>
+    ${!row.supplierPickedUp&&row.supplierPickupStatus==='waiting_pickup'?`<button class="btn pickupAction" type="button" onclick="event.stopPropagation();setPickedUp('${jsq(row.id)}',true)">✓ Позначити як забране</button>`:''}
+  </article>`;
+}
+
+function emptyStateHtml(){
+  return `<div class="emptyIcon">↩</div><strong>Повернень за цими умовами немає</strong><span>Змініть фільтри або додайте повернення вручну.</span>`;
+}
+
+function orderLink(row){
+  const number=row.supplierOrderNumber||'';
+  if(!number)return '<span class="muted">—</span>';
+  if(row.supplierOrderUrl)return `<a class="orderLink" href="${attr(row.supplierOrderUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">#${esc(number)} ↗</a><div class="cellMeta">Відкрити у постачальника</div>`;
+  return `<strong>#${esc(number)}</strong>`;
+}
+
+function productMini(row){
+  if(!row.productName&&!row.productImage)return '<span class="muted">—</span>';
+  const image=row.productImage?`<img src="${attr(row.productImage)}" alt="" onerror="this.closest('.productMini').classList.add('imageError');this.remove()">`:'<span class="imagePlaceholder">▧</span>';
+  return `<div class="productMini">${image}<div><strong>${esc(row.productName||'Товар')}</strong>${row.carrier||row.ttn?`<div class="cellMeta">${esc([row.carrier,row.ttn].filter(Boolean).join(' · '))}</div>`:''}</div></div>`;
+}
+
+function statusBadge(id){
+  const item=(model.config.returnStatuses||[]).find(x=>x.id===id);
+  return item?`<span class="badge ${attr(item.tone)}">${esc(item.label)}</span>`:'<span class="badge neutral">Не визначено</span>';
+}
+function pickupBadge(id){
+  const item=(model.config.pickupStatuses||[]).find(x=>x.id===id);
+  return item?`<span class="badge ${attr(item.tone)}">${esc(item.label)}</span>`:'<span class="badge neutral">—</span>';
+}
+function pickupCell(row){
+  return `<div>${pickupBadge(row.supplierPickupStatus)}${row.supplierPickedUpAt?`<div class="cellMeta">${fmtDateTimeShort(row.supplierPickedUpAt)}</div>`:(row.daysWaiting?`<div class="cellMeta ${row.daysWaiting>=3?'dangerText':''}">${row.daysWaiting} дн. очікування</div>`:'')}</div>`;
+}
+function dateCell(value){return value?`<strong>${fmtDate(value)}</strong><div class="cellMeta">${fmtTime(value)}</div>`:'<span class="muted">—</span>';}
+
+function openDetails(id){selectedId=id;renderRows();renderDetails();document.getElementById('drawerBackdrop').classList.add('open');const drawer=document.getElementById('detailsDrawer');drawer.classList.add('open');drawer.setAttribute('aria-hidden','false');}
+function closeDetails(){selectedId='';document.getElementById('drawerBackdrop').classList.remove('open');const drawer=document.getElementById('detailsDrawer');drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');renderRows();}
+
+function renderDetails(){
+  const row=(model.rows||[]).find(item=>item.id===selectedId);
+  if(!row){closeDetails();return;}
+  document.getElementById('detailNumber').textContent=row.returnNumber||'Повернення';
+  const productBlock=(row.productName||row.productImage)?`<section class="detailSection"><h3>Товар</h3><div class="detailProduct">${row.productImage?`<img src="${attr(row.productImage)}" alt="">`:'<div class="detailImagePlaceholder">▧</div>'}<div><strong>${esc(row.productName||'Товар')}</strong>${row.carrier||row.ttn?`<div class="detailMuted">${esc([row.carrier,row.ttn].filter(Boolean).join(' · '))}</div>`:''}</div></div></section>`:'';
+  const pickupAction=row.supplierPickedUp
+    ?`<div class="pickedPanel"><div><span class="badge success">Забрано</span><strong>${fmtDateTime(row.supplierPickedUpAt)}</strong></div><div class="pickupMenuWrap"><button class="dotsBtn" type="button" onclick="togglePickupMenu()">•••</button><div class="pickupMenu" id="pickupMenu"><button type="button" onclick="setPickedUp('${jsq(row.id)}',false)">Скасувати відмітку про забір</button></div></div></div>`
+    :row.supplierPickupStatus==='waiting_pickup'
+      ?`<span class="badge warning">Очікує забору</span><button class="btn pickupAction detailPickup" type="button" onclick="setPickedUp('${jsq(row.id)}',true)">✓ Позначити як забране постачальником</button><p class="detailHint">Дата та час забору зафіксуються автоматично.</p>`
+      :`<span class="badge danger-soft">Не передано</span><p class="detailHint">Коли повернення прибуде, змініть статус на «Прибуло» — воно перейде в контроль забору.</p>`;
+
+  document.getElementById('drawerBody').innerHTML=`
+    <div class="detailHeaderLine"><div>${statusBadge(row.returnStatus)}</div><button class="btn secondary smallBtn" type="button" onclick="openReturnForm('${jsq(row.id)}')">Редагувати</button></div>
+    <section class="detailSection"><h3>Основна інформація</h3><div class="detailGrid"><span>Постачальник</span><strong>${esc(row.supplierName||'—')}</strong><span>Замовлення</span><div>${orderLink(row)}</div>${row.orderNumber?`<span>Замовлення джерела</span><strong>#${esc(row.orderNumber)}</strong>`:''}</div></section>
+    ${productBlock}
+    <section class="detailSection"><h3>Повернення</h3><div class="detailGrid"><span>Причина</span><strong>${esc(reasonLabel(row.returnReason,row.returnReasonComment)||'—')}</strong><span>Статус</span><div>${statusBadge(row.returnStatus)}</div><span>Сума</span><strong>${money(row.amount)}</strong><span>Дата повернення</span><strong>${row.returnDate?fmtDateTime(row.returnDate):'—'}</strong>${row.deliveryStatus?`<span>Логістика</span><div><strong>${esc(row.deliveryStatus)}</strong>${row.ttn?`<div class="detailMuted">${esc(row.ttn)}</div>`:''}</div>`:''}</div></section>
+    <section class="detailSection pickupSection"><h3>Забір постачальником</h3>${pickupAction}</section>
+  `;
+}
+
+function togglePickupMenu(){const el=document.getElementById('pickupMenu');if(el)el.classList.toggle('open');}
+function setPickedUp(id,taken){call('apiSetSupplierPickedUp',{id:id,taken:taken},data=>{model=data;renderAll();if(taken)toast('Забір постачальником зафіксовано');else toast('Відмітку про забір скасовано');},taken?'Фіксуємо забір…':'Скасовуємо відмітку…');}
+
+function openReturnForm(id){
+  editingId=id||'';
+  const row=editingId?(model.rows||[]).find(item=>item.id===editingId):null;
+  document.getElementById('returnForm').reset();
+  document.getElementById('returnId').value=row?row.id:'';
+  document.getElementById('existingProductImage').value=row?row.productImage||'':'';
+  document.getElementById('returnFormEyebrow').textContent=row?'Редагування':'Нове повернення';
+  document.getElementById('returnFormTitle').textContent=row?'Редагувати повернення':'Додати повернення';
+  renderFilterOptions();
+  if(row){
+    document.getElementById('formSupplier').value=row.supplierId||'';
+    document.getElementById('formSupplierOrder').value=row.supplierOrderNumber||'';
+    document.getElementById('formSupplierOrderUrl').value=row.supplierOrderUrl||'';
+    document.getElementById('formReason').value=row.returnReason||'';
+    document.getElementById('formReasonComment').value=row.returnReasonComment||'';
+    document.getElementById('formAmount').value=row.amount||'';
+    document.getElementById('formStatus').value=row.returnStatus||'expected';
+    document.getElementById('formReturnDate').value=toDatetimeLocal(row.returnDate);
+    document.getElementById('formProductName').value=row.productName||'';
+    document.getElementById('formNote').value=row.note||'';
+    renderImagePreview(row.productImage||'');
+  }else{
+    document.getElementById('formStatus').value='expected';
+    renderImagePreview('');
+  }
+  toggleOtherReason();
+  document.getElementById('returnDialog').showModal();
+}
+function closeReturnForm(){document.getElementById('returnDialog').close();editingId='';}
+
+async function saveReturnForm(event){
+  event.preventDefault();
+  const file=document.getElementById('formProductImageFile').files[0];
+  if(file&&file.size>3*1024*1024){showError('Фото має бути не більше 3 МБ.');return;}
+  const payload={
+    id:document.getElementById('returnId').value,
+    supplierId:document.getElementById('formSupplier').value,
+    supplierOrderNumber:document.getElementById('formSupplierOrder').value,
+    supplierOrderUrl:document.getElementById('formSupplierOrderUrl').value,
+    returnReason:document.getElementById('formReason').value,
+    returnReasonComment:document.getElementById('formReasonComment').value,
+    amount:document.getElementById('formAmount').value,
+    returnStatus:document.getElementById('formStatus').value,
+    returnDate:fromDatetimeLocal(document.getElementById('formReturnDate').value),
+    productName:document.getElementById('formProductName').value,
+    productImage:document.getElementById('existingProductImage').value,
+    note:document.getElementById('formNote').value
+  };
+  if(file)payload.productImageData=await fileToDataUrl(file);
+  const wasEditing=Boolean(editingId);
+  const method=wasEditing?'apiUpdateReturn':'apiCreateReturn';
+  call(method,payload,data=>{model=data;closeReturnForm();renderAll();toast(wasEditing?'Повернення оновлено':'Повернення створено');},'Зберігаємо…');
+}
+
+function toggleOtherReason(){document.getElementById('otherReasonField').classList.toggle('hidden',document.getElementById('formReason').value!=='other');}
+function previewImageFile(){const file=document.getElementById('formProductImageFile').files[0];if(!file){renderImagePreview(document.getElementById('existingProductImage').value);return;}if(file.size>3*1024*1024){showError('Фото має бути не більше 3 МБ.');document.getElementById('formProductImageFile').value='';return;}const reader=new FileReader();reader.onload=()=>renderImagePreview(reader.result);reader.readAsDataURL(file);}
+function renderImagePreview(src){const el=document.getElementById('imagePreview');el.innerHTML=src?`<img src="${attr(src)}" alt="Попередній перегляд">`:'<span>Фото</span>';}
+function fileToDataUrl(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file);});}
+
+function openSettings(){
+  renderSupplierList();
+  setSettingsTab('suppliers');
   call('apiSalesDriveSettings',undefined,state=>{
     document.getElementById('salesDriveSubdomain').value=state.subdomain||'techwolves';
     document.getElementById('salesDriveApiKey').value='';
-    renderSalesDriveSettingsState(state);
-    document.getElementById('salesDriveDialog').showModal();
-  });
+    renderSalesDriveState(state);
+    document.getElementById('settingsDialog').showModal();
+  },'Відкриваємо налаштування…');
 }
-function closeSalesDriveSettings(){document.getElementById('salesDriveDialog').close();}
-function renderSalesDriveSettingsState(state){
-  const parts=[state.configured?'API-ключ збережено':'API-ключ не збережено'];
-  if(state.lastSync) parts.push('остання синхронізація '+fmtDateTime(state.lastSync));
-  document.getElementById('salesDriveStatus').textContent=parts.join(' · ');
-}
-function saveSalesDriveSettings(event){
-  event.preventDefault();
-  const payload={subdomain:document.getElementById('salesDriveSubdomain').value,apiKey:document.getElementById('salesDriveApiKey').value};
-  call('apiSaveSalesDriveSettings',payload,state=>{
-    renderSalesDriveSettingsState(state);
-    document.getElementById('salesDriveApiKey').value='';
-    loadData();
-  });
-}
-function testSalesDrive(){
-  const key=document.getElementById('salesDriveApiKey').value.trim();
-  const subdomain=document.getElementById('salesDriveSubdomain').value.trim();
-  const afterSave=()=>call('apiTestSalesDrive',undefined,result=>{
-    renderSalesDriveSettingsState(result.state||{});
-    document.getElementById('salesDriveStatus').textContent='Підключення працює'+(result.sampleExternalId?' · приклад №'+result.sampleExternalId:'');
-  });
-  if(key){call('apiSaveSalesDriveSettings',{subdomain:subdomain,apiKey:key},()=>{document.getElementById('salesDriveApiKey').value='';afterSave();});}
-  else afterSave();
-}
+function closeSettings(){document.getElementById('settingsDialog').close();}
+function setSettingsTab(tab){document.querySelectorAll('.settingsTab').forEach(el=>el.classList.toggle('active',el.dataset.settingsTab===tab));document.getElementById('settingsSuppliers').classList.toggle('active',tab==='suppliers');document.getElementById('settingsSalesdrive').classList.toggle('active',tab==='salesdrive');}
+function renderSupplierList(){const el=document.getElementById('supplierList');if(!el)return;el.innerHTML=(model.suppliers||[]).length?(model.suppliers||[]).map(item=>`<div class="supplierItem"><span class="supplierAvatar">${esc(item.name.charAt(0).toUpperCase())}</span><strong>${esc(item.name)}</strong></div>`).join(''):'<div class="supplierEmpty">Постачальників ще немає</div>';}
+function addSupplier(event){event.preventDefault();const name=document.getElementById('newSupplierName').value.trim();if(!name)return;call('apiSaveSupplier',{name:name},data=>{model=data;document.getElementById('newSupplierName').value='';renderAll();toast('Постачальника додано');},'Додаємо постачальника…');}
 
-function showError(t){const el=document.getElementById('error');el.textContent=t;el.style.display='block';}
-function hideError(){document.getElementById('error').style.display='none';}
-function esc(v){return String(v||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function attr(v){return esc(v).replace(/`/g,'&#96;');}
-function fmtDate(v){if(!v)return'';const d=new Date(v);return isNaN(d)?'':d.toLocaleDateString('uk-UA');}
-function fmtDateTime(v){if(!v)return'';const d=new Date(v);return isNaN(d)?'':d.toLocaleString('uk-UA');}
+function renderSalesDriveState(state){const parts=[state.configured?'API-ключ збережено':'API-ключ не збережено'];if(state.lastSync)parts.push('остання синхронізація '+fmtDateTime(state.lastSync));document.getElementById('salesDriveStatus').textContent=parts.join(' · ');}
+function saveSalesDriveSettings(event){event.preventDefault();const payload={subdomain:document.getElementById('salesDriveSubdomain').value,apiKey:document.getElementById('salesDriveApiKey').value};call('apiSaveSalesDriveSettings',payload,state=>{renderSalesDriveState(state);document.getElementById('salesDriveApiKey').value='';loadData();toast('Налаштування SalesDrive збережено');},'Зберігаємо SalesDrive…');}
+function testSalesDrive(){const key=document.getElementById('salesDriveApiKey').value.trim();const subdomain=document.getElementById('salesDriveSubdomain').value.trim();const test=()=>call('apiTestSalesDrive',undefined,result=>{renderSalesDriveState(result.state||{});document.getElementById('salesDriveStatus').textContent='Підключення працює'+(result.sampleExternalId?' · приклад №'+result.sampleExternalId:'');toast('SalesDrive відповідає');},'Перевіряємо SalesDrive…');if(key){call('apiSaveSalesDriveSettings',{subdomain:subdomain,apiKey:key},()=>{document.getElementById('salesDriveApiKey').value='';test();},'Зберігаємо ключ…');}else test();}
+
+function toggleFilters(){document.getElementById('filterPanel').classList.toggle('open');}
+function resetFilters(){['filterStatus','filterSupplier','filterReason','filterPickup'].forEach(id=>document.getElementById(id).value='');document.getElementById('periodFrom').value='';document.getElementById('periodTo').value='';document.getElementById('search').value='';renderAll();}
+function updateFilterDot(){const active=['filterStatus','filterSupplier','filterReason','filterPickup'].some(id=>document.getElementById(id)&&document.getElementById(id).value)||document.getElementById('periodFrom').value||document.getElementById('periodTo').value;document.getElementById('filterDot').classList.toggle('active',Boolean(active));}
+
+function reasonLabel(id,comment){const reason=(model.reasons||[]).find(item=>item.id===id);if(!reason)return id==='other'?(comment||'Інше'):'';return id==='other'&&comment?reason.name+': '+comment:reason.name;}
+function sourceLabel(source){return ({manual:'Вручну',salesdrive:'SalesDrive',nova_poshta:'Нова Пошта',ukrposhta:'Укрпошта',meest:'Meest',rozetka:'Rozetka',api:'API'})[source]||source||'';}
+function money(value){const number=Number(value||0);return new Intl.NumberFormat('uk-UA',{maximumFractionDigits:number%1?2:0}).format(number)+' ₴';}
+function fmtDate(value){if(!value)return'';const d=new Date(value);return isNaN(d)?'':d.toLocaleDateString('uk-UA');}
+function fmtTime(value){if(!value)return'';const d=new Date(value);return isNaN(d)?'':d.toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});}
+function fmtDateTime(value){if(!value)return'—';const d=new Date(value);return isNaN(d)?'—':d.toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+function fmtDateTimeShort(value){if(!value)return'—';const d=new Date(value);return isNaN(d)?'—':d.toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+function localDateKey(value){const d=new Date(value);if(isNaN(d))return'';const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`;}
+function toDatetimeLocal(value){if(!value)return'';const d=new Date(value);if(isNaN(d))return'';const pad=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;}
+function fromDatetimeLocal(value){if(!value)return'';const d=new Date(value);return isNaN(d)?'':d.toISOString();}
+function plural(n,one,few,many){const n10=n%10,n100=n%100;if(n10===1&&n100!==11)return one;if(n10>=2&&n10<=4&&(n100<12||n100>14))return few;return many;}
+function esc(value){return String(value===undefined||value===null?'':value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+function attr(value){return esc(value).replace(/`/g,'&#96;');}
+function jsq(value){return String(value||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,' ');}
+function showError(text){const el=document.getElementById('error');el.textContent=text;el.classList.add('show');window.scrollTo({top:0,behavior:'smooth'});}
+function hideError(){document.getElementById('error').classList.remove('show');}
+function toast(text){const el=document.getElementById('toast');el.textContent=text;el.classList.add('show');clearTimeout(window.__toastTimer);window.__toastTimer=setTimeout(()=>el.classList.remove('show'),2400);}
+function setBusy(show,text){document.getElementById('busyText').textContent=text||'Завантаження…';document.getElementById('busyOverlay').classList.toggle('show',Boolean(show));}
+
 loadData();
 </script>
 </body>

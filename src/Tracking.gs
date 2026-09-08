@@ -1,5 +1,5 @@
 function refreshTracking_(){
-  const rows=readReturnRows_().filter(r=>r.ttn&&!r.supplierTaken).slice(0,80);
+  const rows=readReturnRows_().filter(r=>r.ttn&&!r.supplierPickedUp).slice(0,80);
   let checked=0,updated=0,skipped=0,errors=0;
 
   rows.forEach(row=>{
@@ -29,16 +29,8 @@ function trackShipment_(carrier,ttn){
 function trackNovaPoshta_(ttn){
   const key=PropertiesService.getScriptProperties().getProperty('NOVA_POSHTA_API_KEY');
   if(!key) return {skipped:true,source:'Нова Пошта',reason:'NOVA_POSHTA_API_KEY not set'};
-
-  const payload={
-    apiKey:key,
-    modelName:'TrackingDocument',
-    calledMethod:'getStatusDocuments',
-    methodProperties:{Documents:[{DocumentNumber:String(ttn),Phone:''}]}
-  };
-  const response=UrlFetchApp.fetch('https://api.novaposhta.ua/v2.0/json/',{
-    method:'post',contentType:'application/json',payload:JSON.stringify(payload),muteHttpExceptions:true
-  });
+  const payload={apiKey:key,modelName:'TrackingDocument',calledMethod:'getStatusDocuments',methodProperties:{Documents:[{DocumentNumber:String(ttn),Phone:''}]}};
+  const response=UrlFetchApp.fetch('https://api.novaposhta.ua/v2.0/json/',{method:'post',contentType:'application/json',payload:JSON.stringify(payload),muteHttpExceptions:true});
   const json=JSON.parse(response.getContentText()||'{}');
   const item=json&&json.data&&json.data[0]?json.data[0]:{};
   const status=String(item.Status||item.StatusDescription||'');
@@ -50,9 +42,7 @@ function trackTemplateProvider_(name,urlProperty,tokenProperty,ttn){
   const template=p.getProperty(urlProperty);
   if(!template) return {skipped:true,source:name,reason:urlProperty+' not set'};
   const token=p.getProperty(tokenProperty)||'';
-  const url=template
-    .replace(/\{\{TOKEN\}\}/g,encodeURIComponent(token))
-    .replace(/\{\{TTN\}\}/g,encodeURIComponent(String(ttn)));
+  const url=template.replace(/\{\{TOKEN\}\}/g,encodeURIComponent(token)).replace(/\{\{TTN\}\}/g,encodeURIComponent(String(ttn)));
   const response=UrlFetchApp.fetch(url,{method:'get',muteHttpExceptions:true,headers:{Accept:'application/json'}});
   if(response.getResponseCode()<200||response.getResponseCode()>=300) throw new Error(name+' HTTP '+response.getResponseCode());
   const json=JSON.parse(response.getContentText()||'{}');
@@ -65,13 +55,5 @@ function trackTemplateProvider_(name,urlProperty,tokenProperty,ttn){
 function trackingResult_(source,status,statusCode,raw){
   const isReturn=looksLikeReturn_(status);
   const arrived=/повернен.{0,30}(отрим|видан)|отримано.{0,30}відправник|повернул/i.test(status);
-  return {
-    source:source,
-    statusText:status,
-    statusCode:statusCode,
-    isReturn:isReturn,
-    returnStartedAt:isReturn?new Date().toISOString():'',
-    arrivedAt:arrived?new Date().toISOString():'',
-    raw:raw||{}
-  };
+  return {source:source,statusText:status,statusCode:statusCode,isReturn:isReturn,returnStartedAt:isReturn?new Date().toISOString():'',arrivedAt:arrived?new Date().toISOString():'',raw:raw||{}};
 }

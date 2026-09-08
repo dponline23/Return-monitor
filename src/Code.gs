@@ -1,5 +1,5 @@
 const RETURN_MONITOR = Object.freeze({
-  name: 'Повернення — контроль',
+  name: 'Відстеження повернень',
   spreadsheetId: '1mOZ93xQIR_gfFoqZq_hrkbZc3hcGBV6pGzX7g_79B-M',
   returnsSheet: 'Повернення',
   suppliersSheet: 'Постачальники',
@@ -8,112 +8,76 @@ const RETURN_MONITOR = Object.freeze({
   syncEveryMinutes: 60
 });
 
-function doGet() {
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
+function doGet(){
+  return HtmlService.createTemplateFromFile('Index').evaluate()
     .setTitle(RETURN_MONITOR.name)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport','width=device-width, initial-scale=1');
 }
 
-function include_(name) {
-  return HtmlService.createHtmlOutputFromFile(name).getContent();
-}
+function include_(name){ return HtmlService.createHtmlOutputFromFile(name).getContent(); }
 
-function onOpen() {
-  try {
-    SpreadsheetApp.getUi()
-      .createMenu('Повернення')
-      .addItem('Відкрити налаштування', 'showSetupInfo')
-      .addItem('Синхронізувати зараз', 'syncAll')
-      .addItem('Встановити автооновлення', 'installAutomation')
+function onOpen(){
+  try{
+    SpreadsheetApp.getUi().createMenu('Повернення')
+      .addItem('Відкрити налаштування','showSetupInfo')
+      .addItem('Синхронізувати зараз','syncAll')
+      .addItem('Встановити автооновлення','installAutomation')
       .addToUi();
-  } catch (_) {}
+  }catch(_){ }
 }
 
-function showSetupInfo() {
-  const status = getSetupStatus_();
-  SpreadsheetApp.getUi().alert(
-    'Повернення — контроль',
-    'SalesDrive: ' + (status.salesDrive ? 'налаштовано' : 'не налаштовано') + '\n' +
-    'Нова Пошта: ' + (status.novaPoshta ? 'налаштовано' : 'не налаштовано') + '\n' +
-    'Укрпошта: ' + (status.ukrposhta ? 'налаштовано' : 'не налаштовано') + '\n' +
-    'Prom: ' + (status.prom ? 'налаштовано' : 'не налаштовано'),
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
+function showSetupInfo(){
+  const status=getSetupStatus_();
+  SpreadsheetApp.getUi().alert('Відстеження повернень',
+    'SalesDrive: '+(status.salesDrive?'налаштовано':'не налаштовано')+'\n'+
+    'Нова Пошта: '+(status.novaPoshta?'налаштовано':'не налаштовано')+'\n'+
+    'Укрпошта: '+(status.ukrposhta?'налаштовано':'не налаштовано')+'\n'+
+    'Prom: '+(status.prom?'налаштовано':'не налаштовано'),SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
-function setupProject() {
+function setupProject(){
   ensureDatabase_();
   installAutomation();
   return getSetupStatus_();
 }
 
-function installAutomation() {
-  ScriptApp.getProjectTriggers()
-    .filter(t => t.getHandlerFunction() === RETURN_MONITOR.syncFunction)
-    .forEach(t => ScriptApp.deleteTrigger(t));
-
-  ScriptApp.newTrigger(RETURN_MONITOR.syncFunction)
-    .timeBased()
-    .everyHours(1)
-    .create();
-
-  return { ok: true, intervalMinutes: RETURN_MONITOR.syncEveryMinutes };
+function installAutomation(){
+  ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()===RETURN_MONITOR.syncFunction).forEach(t=>ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger(RETURN_MONITOR.syncFunction).timeBased().everyHours(1).create();
+  return {ok:true,intervalMinutes:RETURN_MONITOR.syncEveryMinutes};
 }
 
-function apiDashboard() {
+function apiDashboard(){ return buildDashboard_(); }
+function apiSync(){ syncAll(); return buildDashboard_(); }
+function apiCreateReturn(payload){ saveReturn_(payload,true); return buildDashboard_(); }
+function apiUpdateReturn(payload){ saveReturn_(payload,false); return buildDashboard_(); }
+function apiSetSupplierPickedUp(payload){
+  if(!payload||!payload.id) throw new Error('Не вказано повернення.');
+  markSupplierPickedUp_(String(payload.id),Boolean(payload.taken));
   return buildDashboard_();
 }
+function apiSaveSupplier(payload){ saveSupplier_(payload); return buildDashboard_(); }
+function apiSetupStatus(){ return getSetupStatus_(); }
 
-function apiSync() {
-  return syncAll();
-}
-
-function apiUpdateSupplier(payload) {
-  if (!payload || !payload.rowNumber) throw new Error('Не вказано рядок повернення.');
-  updateSupplierFields_(
-    Number(payload.rowNumber),
-    String(payload.supplier || '').trim(),
-    String(payload.supplierOrder || '').trim()
-  );
-  return buildDashboard_();
-}
-
-function apiMarkTaken(payload) {
-  if (!payload || !payload.rowNumber) throw new Error('Не вказано рядок повернення.');
-  markSupplierTaken_(Number(payload.rowNumber), Boolean(payload.taken));
-  return buildDashboard_();
-}
-
-function apiSetupStatus() {
-  return getSetupStatus_();
-}
-
-function getSetupStatus_() {
-  const p = PropertiesService.getScriptProperties();
-  const salesDriveState = typeof getSalesDriveState_ === 'function' ? getSalesDriveState_() : { configured:false, subdomain:'' };
+function getSetupStatus_(){
+  const p=PropertiesService.getScriptProperties();
+  const salesDriveState=typeof getSalesDriveState_==='function'?getSalesDriveState_():{configured:false,subdomain:''};
   return {
-    salesDrive: Boolean(salesDriveState.configured),
-    salesDriveSubdomain: salesDriveState.subdomain || '',
-    salesDriveLastSync: salesDriveState.lastSync || '',
-    novaPoshta: Boolean(p.getProperty('NOVA_POSHTA_API_KEY')),
-    ukrposhta: Boolean(p.getProperty('UKRPOSHTA_TRACKING_URL_TEMPLATE')),
-    meest: Boolean(p.getProperty('MEEST_TRACKING_URL_TEMPLATE')),
-    prom: Boolean(p.getProperty('PROM_API_TOKEN')),
-    spreadsheetId: RETURN_MONITOR.spreadsheetId
+    salesDrive:Boolean(salesDriveState.configured),
+    salesDriveSubdomain:salesDriveState.subdomain||'',
+    salesDriveLastSync:salesDriveState.lastSync||'',
+    novaPoshta:Boolean(p.getProperty('NOVA_POSHTA_API_KEY')),
+    ukrposhta:Boolean(p.getProperty('UKRPOSHTA_TRACKING_URL_TEMPLATE')),
+    meest:Boolean(p.getProperty('MEEST_TRACKING_URL_TEMPLATE')),
+    prom:Boolean(p.getProperty('PROM_API_TOKEN')),
+    spreadsheetId:RETURN_MONITOR.spreadsheetId
   };
 }
 
-function syncAll() {
+function syncAll(){
   ensureDatabase_();
-  const started = new Date();
-  const result = {
-    ok: true,
-    salesDrive: syncSalesDrive_(),
-    tracking: refreshTracking_(),
-    startedAt: started.toISOString(),
-    finishedAt: new Date().toISOString()
-  };
+  const started=new Date();
+  const result={ok:true,salesDrive:syncSalesDrive_(),tracking:refreshTracking_(),startedAt:started.toISOString(),finishedAt:new Date().toISOString()};
   return result;
 }

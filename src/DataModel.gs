@@ -5,41 +5,64 @@ function readReturnRows_(){
   return sh.getRange(2,1,last-1,RETURN_HEADERS.length).getValues().map((r,i)=>rowToObject_(r,i+2));
 }
 
-function rowToObject_(r,rowNumber){
-  return {
-    rowNumber:rowNumber,
-    salesDriveId:String(r[0]||''),
-    orderNumber:String(r[1]||''),
-    orderDate:dateIso_(r[2]),
-    shop:String(r[3]||''),
-    customer:String(r[4]||''),
-    phone:String(r[5]||''),
-    product:String(r[6]||''),
-    sku:String(r[7]||''),
-    amount:Number(r[8]||0),
-    carrier:String(r[9]||''),
-    ttn:String(r[10]||''),
-    deliveryStatus:String(r[11]||''),
-    deliveryCode:String(r[12]||''),
-    isReturn:toBool_(r[13]),
-    returnStartedAt:dateIso_(r[14]),
-    arrivedAt:dateIso_(r[15]),
-    supplier:String(r[16]||''),
-    supplierOrder:String(r[17]||''),
-    supplierTaken:toBool_(r[18]),
-    closedAt:dateIso_(r[19]),
-    updatedAt:dateIso_(r[20]),
-    statusSource:String(r[21]||''),
-    promId:String(r[22]||''),
-    note:String(r[23]||'')
-  };
+function rowToObject_(row,rowNumber){
+  const result={rowNumber:rowNumber};
+  RETURN_FIELDS.forEach((field,index)=>{ result[field.key]=row[index]; });
+  ['amount'].forEach(key=>result[key]=Number(result[key]||0));
+  ['supplierPickedUp'].forEach(key=>result[key]=toBool_(result[key]));
+  ['supplierPickedUpAt','returnDate','createdAt','updatedAt','orderDate','returnStartedAt','arrivedAt'].forEach(key=>result[key]=dateIso_(result[key]));
+  RETURN_KEYS.filter(key=>!['amount','supplierPickedUp','supplierPickedUpAt','returnDate','createdAt','updatedAt','orderDate','returnStartedAt','arrivedAt'].includes(key))
+    .forEach(key=>result[key]=String(result[key]||''));
+  return normalizeReturnState_(result,false);
 }
 
-function objectToRow_(o){
-  return [
-    o.salesDriveId||'',o.orderNumber||'',parseDate_(o.orderDate),o.shop||'',o.customer||'',o.phone||'',
-    o.product||'',o.sku||'',Number(o.amount||0),o.carrier||'',o.ttn||'',o.deliveryStatus||'',o.deliveryCode||'',
-    Boolean(o.isReturn),parseDate_(o.returnStartedAt),parseDate_(o.arrivedAt),o.supplier||'',o.supplierOrder||'',
-    Boolean(o.supplierTaken),parseDate_(o.closedAt),new Date(),o.statusSource||'',o.promId||'',o.note||''
-  ];
+function objectToRow_(input){
+  const o=Object.assign({},input||{});
+  return RETURN_FIELDS.map(field=>{
+    const key=field.key;
+    if(key==='amount') return Number(o[key]||0);
+    if(key==='supplierPickedUp') return Boolean(o[key]);
+    if(['supplierPickedUpAt','returnDate','createdAt','updatedAt','orderDate','returnStartedAt','arrivedAt'].includes(key)) return parseDate_(o[key]);
+    return o[key]===undefined||o[key]===null?'':o[key];
+  });
+}
+
+function normalizeReturnState_(input,applyDefaults){
+  const o=Object.assign({},input||{});
+  if(applyDefaults){
+    if(!o.returnStatus) o.returnStatus='expected';
+    if(!o.supplierPickupStatus) o.supplierPickupStatus='not_handed_over';
+    if(!o.source) o.source='manual';
+  }
+  if(o.supplierPickedUp){
+    o.supplierPickupStatus='picked_up';
+  }else if(o.returnStatus==='arrived'){
+    o.supplierPickupStatus='waiting_pickup';
+  }else if(o.supplierPickupStatus==='picked_up'||!o.supplierPickupStatus){
+    o.supplierPickupStatus='not_handed_over';
+  }
+  return o;
+}
+
+function isReturnRecord_(row){
+  if(!row) return false;
+  if(row.source==='manual') return true;
+  if(row.returnNumber||row.returnStartedAt||row.returnStatus) return true;
+  return looksLikeReturn_(row.deliveryStatus);
+}
+
+function findReturnById_(id){
+  const target=String(id||'').trim();
+  if(!target) return null;
+  return readReturnRows_().find(row=>row.id===target)||null;
+}
+
+function supplierById_(id){
+  const target=String(id||'').trim();
+  return getSuppliers_().find(item=>item.id===target)||null;
+}
+
+function returnReasonById_(id){
+  const target=String(id||'').trim();
+  return getReturnReasons_().find(item=>item.id===target)||null;
 }
