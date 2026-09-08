@@ -52,6 +52,7 @@ function apiTestSalesDrive(){
     ok:true,
     sampleOrderId:first?String(first.id||''):'',
     sampleExternalId:first?String(first.externalId||''):'',
+    sampleStatus:first?salesDriveOrderStatusText_(first):'',
     state:getSalesDriveState_()
   };
 }
@@ -91,11 +92,13 @@ function syncSalesDrive_(){
   });
 
   const saved=upsertSalesDriveOrders_(unique);
+  const detectedReturns=unique.filter(item=>item.isReturn).length;
   p.setProperty(SALESDRIVE_CONFIG.lastSyncProperty,now.toISOString());
   return {
     ok:true,
     received:received,
     usable:unique.length,
+    detectedReturns:detectedReturns,
     inserted:saved.inserted,
     updated:saved.updated,
     pages:page,
@@ -156,12 +159,20 @@ function normalizeSalesDriveOrders_(raw){
   const externalId=String(raw.externalId||'');
   const campaign=String(raw.utmCampaign||raw.utmSource||'').trim();
   const isProm=/prom/i.test(campaign);
+  const orderStatusText=salesDriveOrderStatusText_(raw);
+  const orderStatusIsReturn=looksLikeReturn_(orderStatusText);
+  const statusChangedAt=firstValue_(raw,['statusChangedAt','statusChangeTime','updateTime','updatedAt','editTime','modifiedAt']);
 
   return usableDeliveries.map(delivery=>{
     const provider=String(delivery.provider||'').trim();
     const carrier=salesDriveCarrierName_(provider,raw.shipping_method);
     const code=delivery.statusCode===undefined||delivery.statusCode===null?'':String(delivery.statusCode);
-    const status=compactText_(firstValue_(delivery,['statusText','status','statusDescription','deliveryStatus','state'])) || (code?'SalesDrive · код '+code:'');
+    const deliveryStatus=compactText_(firstValue_(delivery,['statusText','status','statusDescription','deliveryStatus','state'])) || (code?'SalesDrive · код '+code:'');
+    const combinedStatus=[orderStatusText,deliveryStatus].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
+    const isReturn=orderStatusIsReturn||looksLikeReturn_(deliveryStatus);
+    const noteParts=[];
+    if(orderStatusText) noteParts.push('Статус SalesDrive: '+orderStatusText);
+    if(delivery.parentTrackingNumber) noteParts.push('Батьківська ТТН: '+delivery.parentTrackingNumber);
     return {
       salesDriveId:String(raw.id||raw.orderId||raw.order_id||''),
       orderNumber:externalId||String(raw.id||''),
@@ -174,16 +185,34 @@ function normalizeSalesDriveOrders_(raw){
       amount:Number(raw.paymentAmount||raw.total||raw.amount||0),
       carrier:carrier,
       ttn:String(delivery.trackingNumber||''),
-      deliveryStatus:status,
+      deliveryStatus:combinedStatus,
       deliveryCode:code,
-      isReturn:looksLikeReturn_(status),
-      returnStartedAt:'',
+      isReturn:isReturn,
+      returnStartedAt:isReturn?(statusChangedAt||''):'',
       arrivedAt:delivery.deliveryDateAndTime||'',
       statusSource:'SalesDrive',
       promId:isProm?externalId:'',
-      note:delivery.parentTrackingNumber?('Батьківська ТТН: '+delivery.parentTrackingNumber):''
+      note:noteParts.join(' · ')
     };
   });
+}
+
+function salesDriveOrderStatusText_(raw){
+  raw=raw||{};
+  const values=[
+    raw.statusName,
+    raw.statusText,
+    raw.orderStatusName,
+    raw.currentStatusName,
+    raw.stateName,
+    compactText_(raw.status),
+    compactText_(raw.orderStatus),
+    compactText_(raw.currentStatus),
+    compactText_(raw.statusData),
+    compactText_(raw.status_data),
+    compactText_(raw.state)
+  ].map(value=>String(value||'').trim()).filter(Boolean);
+  return values.filter((value,index)=>values.indexOf(value)===index).join(' · ');
 }
 
 function salesDriveCarrierName_(provider,shippingMethod){
