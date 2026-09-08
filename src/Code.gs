@@ -51,50 +51,23 @@ function installAutomation(){
 function apiDashboard(){ return buildDashboard_(); }
 function apiSync(){ syncAll(); return buildDashboard_(); }
 function apiCreateReturn(payload){
-  const lock=LockService.getUserLock();
-  lock.waitLock(30000);
-  try{
-    const duplicate=findRecentManualDuplicate_(payload);
-    if(!duplicate) saveReturn_(payload,true);
-    return buildDashboard_();
-  }finally{
-    lock.releaseLock();
-  }
+  const id=saveReturn_(payload,true);
+  return findReturnByIdFast_(id);
 }
-function apiUpdateReturn(payload){ saveReturn_(payload,false); return buildDashboard_(); }
+function apiUpdateReturn(payload){
+  const id=saveReturn_(payload,false);
+  return findReturnByIdFast_(id);
+}
 function apiSetSupplierPickedUp(payload){
   if(!payload||!payload.id) throw new Error('Не вказано повернення.');
-  markSupplierPickedUp_(String(payload.id),Boolean(payload.taken));
-  return buildDashboard_();
+  return markSupplierPickedUp_(String(payload.id),Boolean(payload.taken));
+}
+function apiSetSupplierNotified(payload){
+  if(!payload||!payload.id) throw new Error('Не вказано повернення.');
+  return markSupplierNotified_(String(payload.id),Boolean(payload.notified));
 }
 function apiSaveSupplier(payload){ saveSupplier_(payload); return buildDashboard_(); }
 function apiSetupStatus(){ return getSetupStatus_(); }
-
-function findRecentManualDuplicate_(payload){
-  payload=payload||{};
-  const now=Date.now();
-  const supplierId=String(payload.supplierId||'').trim();
-  const supplierOrderNumber=String(payload.supplierOrderNumber||'').trim();
-  const productName=String(payload.productName||'').trim().toLowerCase();
-  const reason=String(payload.returnReason||'').trim();
-  const amount=payload.amount===''||payload.amount===null||payload.amount===undefined?0:Number(payload.amount||0);
-  const returnDate=dateIso_(payload.returnDate)||'';
-  const note=String(payload.note||'').trim().toLowerCase();
-
-  return readReturnRows_().find(row=>{
-    if(row.source!=='manual') return false;
-    const created=parseDate_(row.createdAt);
-    if(!created||now-created.getTime()>120000) return false;
-    if(String(row.supplierId||'')!==supplierId) return false;
-    if(String(row.supplierOrderNumber||'').trim()!==supplierOrderNumber) return false;
-    if(String(row.productName||'').trim().toLowerCase()!==productName) return false;
-    if(String(row.returnReason||'').trim()!==reason) return false;
-    if(Number(row.amount||0)!==Number(amount||0)) return false;
-    if((dateIso_(row.returnDate)||'')!==returnDate) return false;
-    if(String(row.note||'').trim().toLowerCase()!==note) return false;
-    return true;
-  })||null;
-}
 
 function getSetupStatus_(){
   const p=PropertiesService.getScriptProperties();
