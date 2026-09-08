@@ -16,6 +16,18 @@ Script ID: `1kJJ4wr_MrxQm8gQWfM43uV5aVw2Pdvze2CFpr5hsoi6lsncI-qEF6dOi`
 
 Код Apps Script лежить у `src/`.
 
+## SalesDrive
+
+Використовується підтверджений endpoint бази заявок:
+
+`https://<subdomain>.salesdrive.me/api/order/list/`
+
+Авторизація: заголовок `X-Api-Key`. Потрібен API-ключ бази заявок з правом `Заявки — читання`.
+
+У вебзастосунку ключ можна один раз ввести через `Налаштування`. Він зберігається тільки у Script Properties.
+
+З SalesDrive читаються, зокрема, `ord_delivery_data[].provider`, `trackingNumber`, `statusCode`, `primaryContact`, `products`, `externalId`, `orderTime`, `paymentAmount`.
+
 ## Локальна робота
 
 ```powershell
@@ -62,12 +74,9 @@ Workflow `.github/workflows/deploy.yml` на кожен push у `main`:
 
 ## Script Properties
 
-Секрети зберігаються тільки в Apps Script → Project Settings → Script properties.
-
-Підтримані ключі:
-
-- `SALESDRIVE_API_URL_TEMPLATE`
-- `SALESDRIVE_API_TOKEN`
+- `SALESDRIVE_SUBDOMAIN`
+- `SALESDRIVE_ORDER_API_KEY`
+- `SALESDRIVE_LAST_SYNC` — службове, заповнюється автоматично
 - `NOVA_POSHTA_API_KEY`
 - `UKRPOSHTA_TRACKING_URL_TEMPLATE`
 - `UKRPOSHTA_TRACKING_TOKEN`
@@ -75,7 +84,7 @@ Workflow `.github/workflows/deploy.yml` на кожен push у `main`:
 - `MEEST_TRACKING_TOKEN`
 - `PROM_API_TOKEN`
 
-Для URL-шаблонів можна використовувати `{{TOKEN}}` і `{{TTN}}`.
+Для tracking URL-шаблонів можна використовувати `{{TOKEN}}` і `{{TTN}}`.
 
 ## Таблиця
 
