@@ -1,0 +1,108 @@
+name: Mobile detail density fix once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mobile-detail-density-fix-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Match approved mobile return-details density
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('src/Styles.html')
+          s = p.read_text(encoding='utf-8')
+          block = r'''
+<style>
+/* Compact sizing to match approved mobile return-detail reference */
+@media(max-width:760px){
+  .detailsDrawer.refDetails{font-size:12px}
+  .detailsDrawer.refDetails .drawerHead{grid-template-columns:34px minmax(0,1fr) 34px;gap:8px;padding:8px 10px}
+  .refBack,.refMore{width:34px;height:34px;border-radius:10px}
+  .refBack svg,.refMore svg{width:18px!important;height:18px!important}
+  .refHeadTitle strong{font-size:15px;line-height:1.12}
+  .refHeadTitle span{font-size:10px;margin-top:2px}
+
+  .detailsDrawer.refDetails .drawerBody{padding:7px}
+  .refCard{padding:9px;border-radius:13px;margin-bottom:8px;box-shadow:0 3px 10px rgba(16,24,40,.04)}
+  .refCardHead{margin-bottom:6px}
+  .refCardTitle{gap:7px}
+  .refCardTitle strong{font-size:12px;line-height:1.2}
+  .refSectionIcon{width:28px;height:28px;border-radius:9px}
+  .refSectionIcon svg{width:14px!important;height:14px!important}
+  .refEditBtn{height:28px;padding:0 8px;border-radius:8px;font-size:10px;gap:5px}
+  .refEditBtn svg{width:13px!important;height:13px!important}
+
+  .refSummary{grid-template-columns:minmax(0,1.2fr) 1px minmax(0,.9fr);gap:9px}
+  .refSummaryLeft{gap:8px}
+  .refSummaryIcon{width:36px;height:36px;border-radius:11px}
+  .refSummaryIcon svg{width:18px!important;height:18px!important}
+  .refSummaryRight strong{font-size:15px;line-height:1.05}
+  .refCaption{font-size:9.5px;margin-top:2px}
+  .refDetails .badge{font-size:9.5px;padding:4px 7px}
+
+  .refRows .refRow{grid-template-columns:14px 104px minmax(0,1fr) auto;gap:6px;min-height:29px}
+  .refRowIcon svg{width:13px!important;height:13px!important}
+  .refRowLabel{font-size:10px;line-height:1.2}
+  .refRowValue{font-size:11px;line-height:1.28;font-weight:650}
+  .refRowValue .orderLink{font-size:11px}
+  .refRowAction .refIconBtn{width:25px;height:25px;border-radius:7px}
+  .refRowAction .refIconBtn svg{width:12px!important;height:12px!important}
+
+  .refProductInner{gap:9px;padding:8px;border-radius:11px}
+  .refProductInner img,.refProductPlaceholder{width:54px;height:54px;border-radius:10px}
+  .refProductInner strong{font-size:11px;line-height:1.3}
+
+  .refSupplierActions{grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}
+  .refCopyAll,.refNotifyBtn{min-height:32px!important;padding:6px 8px!important;border-radius:9px;font-size:10.5px!important;line-height:1.15;display:flex;align-items:center;justify-content:center;gap:5px}
+  .refCopyAll svg,.refNotifyBtn svg{width:14px!important;height:14px!important;min-width:14px;max-width:14px;flex:0 0 14px}
+  .refNotifyState{min-height:32px;padding:5px 8px;border-radius:9px;gap:6px}
+  .refNotifyState svg{width:14px!important;height:14px!important;flex:0 0 14px}
+  .refNotifyState strong{font-size:10px;line-height:1.15}
+  .refNotifyState span{font-size:8.5px;margin-top:1px}
+  .refCancel{min-height:29px!important;margin-top:6px;padding:5px 8px!important;border-radius:8px;font-size:9.5px!important;line-height:1.15;display:flex;align-items:center;justify-content:center;gap:5px}
+  .refCancel svg{width:13px!important;height:13px!important;flex:0 0 13px}
+
+  .refPickupBox{grid-template-columns:32px minmax(0,1fr);gap:8px;padding:8px 9px;border-radius:11px}
+  .refPickupIcon{width:30px;height:30px}
+  .refPickupIcon svg{width:16px!important;height:16px!important}
+  .refPickupBox strong{font-size:11px;line-height:1.2;margin-bottom:2px}
+  .refPickupBox span{font-size:9.5px;line-height:1.3}
+  .refPickupBox .pickupAction{min-height:31px;margin-top:2px;padding:5px 8px;font-size:10px;border-radius:8px}
+
+  .refBackList{min-height:31px!important;padding:5px 9px!important;border-radius:9px;font-size:10px!important;display:flex;align-items:center;justify-content:center;gap:5px}
+  .refBackList svg{width:13px!important;height:13px!important;flex:0 0 13px}
+}
+@media(max-width:390px){
+  .refRows .refRow{grid-template-columns:14px 96px minmax(0,1fr) auto}
+  .refSupplierActions{grid-template-columns:1fr 1fr}
+  .refCard{padding:8px}
+  .refProductInner img,.refProductPlaceholder{width:50px;height:50px}
+}
+</style>
+'''
+          pattern = re.compile(r'\n<style>\n/\* Compact sizing to match approved mobile return-detail reference \*/.*?</style>\n', re.S)
+          if not pattern.search(s):
+              raise SystemExit('Compact mobile sizing block not found')
+          s = pattern.sub('\n' + block.strip() + '\n', s, count=1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+          rm -f .github/workflows/mobile-detail-density-fix-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/Styles.html .github/workflows/mobile-detail-density-fix-once.yml
+          git commit -m "Match mobile return details approved mockup density"
+          git push
