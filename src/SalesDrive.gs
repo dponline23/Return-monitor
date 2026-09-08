@@ -19,9 +19,7 @@ function getSalesDriveState_(){
   };
 }
 
-function apiSalesDriveSettings(){
-  return getSalesDriveState_();
-}
+function apiSalesDriveSettings(){ return getSalesDriveState_(); }
 
 function apiSaveSalesDriveSettings(payload){
   payload=payload||{};
@@ -153,22 +151,15 @@ function salesDriveStatusMap_(subdomain,apiKey){
   }
 
   let payload=null;
-  try{
-    payload=salesDriveRequestJson_('https://'+subdomain+'.salesdrive.me/api/statuses/',apiKey);
-  }catch(_){
-    return {};
-  }
+  try{ payload=salesDriveRequestJson_('https://'+subdomain+'.salesdrive.me/api/statuses/',apiKey); }
+  catch(_){ return {}; }
 
   const map={};
   const visited=new Set();
   const collect=value=>{
     if(value===null||value===undefined) return;
-    if(Array.isArray(value)){
-      value.forEach(collect);
-      return;
-    }
-    if(typeof value!=='object') return;
-    if(visited.has(value)) return;
+    if(Array.isArray(value)){ value.forEach(collect); return; }
+    if(typeof value!=='object'||visited.has(value)) return;
     visited.add(value);
 
     const id=firstValue_(value,['id','statusId','status_id','value','key']);
@@ -221,10 +212,13 @@ function normalizeSalesDriveOrders_(raw,statusMap){
     const deliveryStatus=compactText_(firstValue_(delivery,['statusText','status','statusDescription','deliveryStatus','state'])) || (code?'SalesDrive · код '+code:'');
     const combinedStatus=[orderStatusText,deliveryStatus].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
     const isReturn=orderStatusIsReturn||looksLikeReturn_(deliveryStatus);
+    const returnArrived=isReturn&&looksLikeReturnArrived_(combinedStatus);
+    const trackingNumber=String(delivery.trackingNumber||'');
+    const parentTracking=String(delivery.parentTrackingNumber||'');
     const noteParts=[];
     if(orderStatusText) noteParts.push('Статус SalesDrive: '+orderStatusText+(orderStatusId?' [ID '+orderStatusId+']':''));
     else if(orderStatusId) noteParts.push('Статус SalesDrive ID: '+orderStatusId);
-    if(delivery.parentTrackingNumber) noteParts.push('Батьківська ТТН: '+delivery.parentTrackingNumber);
+    if(parentTracking) noteParts.push('Батьківська ТТН: '+parentTracking);
     return {
       salesDriveId:String(raw.id||raw.orderId||raw.order_id||''),
       orderNumber:externalId||String(raw.id||''),
@@ -236,12 +230,14 @@ function normalizeSalesDriveOrders_(raw,statusMap){
       sku:skuText,
       amount:Number(raw.paymentAmount||raw.total||raw.amount||0),
       carrier:carrier,
-      ttn:String(delivery.trackingNumber||''),
+      ttn:trackingNumber,
+      originalTtn:parentTracking||trackingNumber,
+      returnTtn:isReturn?trackingNumber:'',
       deliveryStatus:combinedStatus,
       deliveryCode:code,
       isReturn:isReturn,
       returnStartedAt:isReturn?(statusChangedAt||''):'',
-      arrivedAt:delivery.deliveryDateAndTime||'',
+      arrivedAt:returnArrived?(delivery.deliveryDateAndTime||statusChangedAt||''):'',
       statusSource:'SalesDrive',
       promId:isProm?externalId:'',
       note:noteParts.join(' · ')
@@ -254,20 +250,8 @@ function salesDriveOrderStatusText_(raw,statusMap){
   statusMap=statusMap||{};
   const statusId=String(firstValue_(raw,['statusId','status_id','status.id','orderStatusId','currentStatusId'])||'').trim();
   const resolved=statusId&&statusMap[statusId]?String(statusMap[statusId]).trim():'';
-  const values=[
-    resolved,
-    raw.statusName,
-    raw.statusText,
-    raw.orderStatusName,
-    raw.currentStatusName,
-    raw.stateName,
-    compactText_(raw.status),
-    compactText_(raw.orderStatus),
-    compactText_(raw.currentStatus),
-    compactText_(raw.statusData),
-    compactText_(raw.status_data),
-    compactText_(raw.state)
-  ].map(value=>String(value||'').trim()).filter(Boolean);
+  const values=[resolved,raw.statusName,raw.statusText,raw.orderStatusName,raw.currentStatusName,raw.stateName,compactText_(raw.status),compactText_(raw.orderStatus),compactText_(raw.currentStatus),compactText_(raw.statusData),compactText_(raw.status_data),compactText_(raw.state)]
+    .map(value=>String(value||'').trim()).filter(Boolean);
   return values.filter((value,index)=>values.indexOf(value)===index).join(' · ');
 }
 
