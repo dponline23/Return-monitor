@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <?!= include_('Styles'); ?>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="top">
+    <div><div class="title">Повернення — контроль</div><div class="sub" id="setupLine">Завантаження…</div></div>
+    <div class="actions"><button class="btn" onclick="loadData()">Оновити</button><button class="btn primary" onclick="syncNow()">Синхронізувати</button></div>
+  </div>
+  <div class="error" id="error"></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="toolbar"><input class="search" id="search" placeholder="Пошук: № замовлення, ТТН, постачальник, товар" oninput="renderRows()"></div>
+  <div class="table" id="table"></div>
+</div>
+<script>
+let model={rows:[],counts:{returning:0,arrived:0,waiting:0,closed:0}},active:'returning';
+const labels={returning:'Повертаються',arrived:'Приїхали',waiting:'Очікують постачальника',closed:'Закриті'};
+
+function call(name,args,onSuccess){
+  document.getElementById('app').classList.add('loader');
+  const runner=google.script.run.withSuccessHandler(v=>{document.getElementById('app').classList.remove('loader');hideError();onSuccess(v);}).withFailureHandler(e=>{document.getElementById('app').classList.remove('loader');showError(e&&e.message?e.message:String(e));});
+  if(args===undefined) runner[name](); else runner[name](args);
+}
+function loadData(){call('apiDashboard',undefined,data=>{model=data;render();});}
+function syncNow(){call('apiSync',undefined,()=>loadData());}
+function setTab(name){model.active=name;renderTabs();renderRows();}
+function render(){renderKpis();renderTabs();renderRows();renderSetup();}
+function renderKpis(){
+  const c=model.counts||{};
+  document.getElementById('kpis').innerHTML=['returning','arrived','waiting','closed'].map(k=>`<div class="kpi"><b>${c[k]||0}</b><span>${labels[k]}</span></div>`).join('');
+}
+function renderTabs(){
+  const c=model.counts||{};
+  document.getElementById('tabs').innerHTML=['returning','arrived','waiting','closed'].map(k=>`<button class="tab ${model.active===k?'active':''}" onclick="setTab('${k}')">${labels[k]} · ${c[k]||0}</button>`).join('');
+}
+function renderSetup(){
+  const s=model.setup||{};
+  const ok=[]; if(s.salesDrive)ok.push('SalesDrive'); if(s.novaPoshta)ok.push('НП'); if(s.ukrposhta)ok.push('Укрпошта'); if(s.prom)ok.push('Prom');
+  document.getElementById('setupLine').textContent=ok.length?'Підключено: '+ok.join(' · '):'API ще не налаштовані';
+}
+function renderRows(){
+  const q=(document.getElementById('search').value||'').toLowerCase().trim();
+  let rows=(model.rows||[]).filter(r=>r.bucket===model.active);
+  if(q) rows=rows.filter(r=>[r.orderNumber,r.ttn,r.supplier,r.supplierOrder,r.product,r.sku,r.customer].join(' ').toLowerCase().includes(q));
+  const table=document.getElementById('table');
+  const head='<div class="row head"><div>Замовлення</div><div>Товар / клієнт</div><div>Доставка</div><div>Статус</div><div>Постачальник</div><div>Дія</div></div>';
+  if(!rows.length){table.innerHTML=head+'<div class="empty">Немає повернень у цьому розділі</div>';return;}
+  table.innerHTML=head+rows.map(rowHtml).join('');
+}
+function rowHtml(r){
+  const wait=r.daysWaiting?` · ${r.daysWaiting} дн.`:'';
+  const statusClass=r.bucket==='closed'?'ok':(r.daysWaiting>=3?'warn':'');
+  return `<div class="row">
+    <div class="main"><b>№${esc(r.orderNumber||r.salesDriveId)}</b><div class="meta">${fmtDate(r.orderDate)}</div></div>
+    <div class="main"><b>${esc(r.product||'—')}</b><div class="meta">${esc(r.sku||'')} ${r.customer?'· '+esc(r.customer):''}</div></div>
+    <div><b>${esc(r.carrier||'—')}</b><div class="meta">${esc(r.ttn||'—')}</div></div>
+    <div class="status ${statusClass}">${esc(r.deliveryStatus||'—')}<div class="meta">${r.arrivedAt?'Прибуло '+fmtDate(r.arrivedAt):''}${wait}</div></div>
+    <div class="edit"><input id="s${r.rowNumber}" value="${attr(r.supplier)}" placeholder="Постачальник"><input id="o${r.rowNumber}" value="${attr(r.supplierOrder)}" placeholder="№ у постачальника"></div>
+    <div><button class="btn small" onclick="saveSupplier(${r.rowNumber})">Зберегти</button> ${r.supplierTaken?'<button class="btn small" onclick="markTaken('+r.rowNumber+',false)">Повернути в роботу</button>':'<button class="btn small primary" onclick="markTaken('+r.rowNumber+',true)">✓ Забрано</button>'}</div>
+  </div>`;
+}
+function saveSupplier(row){call('apiUpdateSupplier',{rowNumber:row,supplier:document.getElementById('s'+row).value,supplierOrder:document.getElementById('o'+row).value},data=>{model=data;render();});}
+function markTaken(row,taken){call('apiMarkTaken',{rowNumber:row,taken:taken},data=>{model=data;render();});}
+function showError(t){const el=document.getElementById('error');el.textContent=t;el.style.display='block';}
+function hideError(){document.getElementById('error').style.display='none';}
+function esc(v){return String(v||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function attr(v){return esc(v).replace(/`/g,'&#96;');}
+function fmtDate(v){if(!v)return'';const d=new Date(v);return isNaN(d)?'':d.toLocaleDateString('uk-UA');}
+loadData();
+</script>
+</body>
+</html>
