@@ -34,35 +34,18 @@
   <div class="error" id="error"></div>
 
   <section class="statsGrid" aria-label="Статистика">
-    <article class="statCard">
-      <div class="statIcon green">▣</div>
-      <div><div class="statValue" id="statTotal">0</div><div class="statLabel">Усього повернень</div><div class="statHint">за вибраний період</div></div>
-    </article>
-    <article class="statCard">
-      <div class="statIcon amber">◷</div>
-      <div><div class="statValue" id="statWaiting">0</div><div class="statLabel">Очікують</div><div class="statHint">потребують контролю</div></div>
-    </article>
-    <article class="statCard">
-      <div class="statIcon green">✓</div>
-      <div><div class="statValue" id="statPicked">0</div><div class="statLabel">Забрано постачальником</div><div class="statHint">фактично отримано</div></div>
-    </article>
-    <article class="statCard">
-      <div class="statIcon neutral">₴</div>
-      <div><div class="statValue" id="statAmount">0 ₴</div><div class="statLabel">Сума повернень</div><div class="statHint">за вибраний період</div></div>
-    </article>
+    <article class="statCard"><div class="statIcon green">▣</div><div><div class="statValue" id="statTotal">0</div><div class="statLabel">Усього повернень</div><div class="statHint">за вибраний період</div></div></article>
+    <article class="statCard"><div class="statIcon amber">◷</div><div><div class="statValue" id="statWaiting">0</div><div class="statLabel">Очікують</div><div class="statHint">потребують контролю</div></div></article>
+    <article class="statCard"><div class="statIcon green">✓</div><div><div class="statValue" id="statPicked">0</div><div class="statLabel">Забрано постачальником</div><div class="statHint">фактично отримано</div></div></article>
+    <article class="statCard"><div class="statIcon neutral">₴</div><div><div class="statValue" id="statAmount">0 ₴</div><div class="statLabel">Сума повернень</div><div class="statHint">за вибраний період</div></div></article>
   </section>
 
   <section class="workspaceCard">
     <div class="tabs" id="tabs"></div>
-
     <div class="toolbar">
-      <div class="searchWrap">
-        <span>⌕</span>
-        <input id="search" placeholder="Пошук за № повернення, замовленням, постачальником, товаром…" oninput="renderRows()">
-      </div>
+      <div class="searchWrap"><span>⌕</span><input id="search" placeholder="Пошук за № повернення, замовленням, ТТН, постачальником, товаром…" oninput="renderRows()"></div>
       <button class="btn secondary filterToggle" type="button" onclick="toggleFilters()">▽ Фільтри <span class="filterDot" id="filterDot"></span></button>
     </div>
-
     <div class="filterPanel" id="filterPanel">
       <label><span>Статус повернення</span><select id="filterStatus" onchange="renderRows()"></select></label>
       <label><span>Постачальник</span><select id="filterSupplier" onchange="renderRows()"></select></label>
@@ -70,7 +53,6 @@
       <label><span>Забір постачальником</span><select id="filterPickup" onchange="renderRows()"></select></label>
       <button class="resetFilters" type="button" onclick="resetFilters()">↶ Скинути фільтри</button>
     </div>
-
     <div class="desktopTable" id="desktopTable"></div>
     <div class="mobileCards" id="mobileCards"></div>
     <div class="listFooter" id="listFooter"></div>
@@ -79,21 +61,14 @@
 
 <div class="drawerBackdrop" id="drawerBackdrop" onclick="closeDetails()"></div>
 <aside class="detailsDrawer" id="detailsDrawer" aria-hidden="true">
-  <div class="drawerHead">
-    <div><div class="eyebrow">Деталі повернення</div><h2 id="detailNumber">—</h2></div>
-    <button class="closeBtn" type="button" onclick="closeDetails()">×</button>
-  </div>
+  <div class="drawerHead"><div><div class="eyebrow">Деталі повернення</div><h2 id="detailNumber">—</h2></div><button class="closeBtn" type="button" onclick="closeDetails()">×</button></div>
   <div class="drawerBody" id="drawerBody"></div>
 </aside>
 
 <dialog id="returnDialog" class="modal wideModal">
   <form id="returnForm" onsubmit="saveReturnForm(event)">
-    <div class="modalHead">
-      <div><div class="eyebrow" id="returnFormEyebrow">Нове повернення</div><h2 id="returnFormTitle">Додати повернення</h2></div>
-      <button class="closeBtn" type="button" onclick="closeReturnForm()">×</button>
-    </div>
-    <input type="hidden" id="returnId">
-    <input type="hidden" id="existingProductImage">
+    <div class="modalHead"><div><div class="eyebrow" id="returnFormEyebrow">Нове повернення</div><h2 id="returnFormTitle">Додати повернення</h2></div><button class="closeBtn" type="button" onclick="closeReturnForm()">×</button></div>
+    <input type="hidden" id="returnId"><input type="hidden" id="existingProductImage">
 
     <div class="formSection">
       <h3>Постачальник і замовлення</h3>
@@ -107,6 +82,8 @@
     <div class="formSection">
       <h3>Повернення</h3>
       <div class="formGrid two">
+        <label class="field"><span>Першочергова ТТН</span><input id="formOriginalTtn" inputmode="numeric" autocomplete="off" placeholder="ТТН відправлення клієнту"></label>
+        <label class="field"><span>ТТН повернення</span><input id="formReturnTtn" inputmode="numeric" autocomplete="off" placeholder="ТТН, за якою товар повертається"></label>
         <label class="field"><span>Причина</span><select id="formReason" onchange="toggleOtherReason()"></select></label>
         <label class="field"><span>Сума, ₴</span><input id="formAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></label>
         <label class="field"><span>Статус повернення</span><select id="formStatus"></select></label>
@@ -127,42 +104,25 @@
       <label class="field"><span>Примітка</span><textarea id="formNote" rows="2" maxlength="400" placeholder="Необов'язково"></textarea></label>
     </div>
 
-    <div class="modalActions">
-      <button class="btn secondary" type="button" onclick="closeReturnForm()">Скасувати</button>
-      <button class="btn primary" type="submit">Зберегти повернення</button>
-    </div>
+    <div class="modalActions"><button class="btn secondary" type="button" onclick="closeReturnForm()">Скасувати</button><button class="btn primary" id="returnSubmitBtn" type="submit">Зберегти повернення</button></div>
   </form>
 </dialog>
 
 <dialog id="settingsDialog" class="modal settingsModal">
-  <div class="modalHead">
-    <div><div class="eyebrow">Налаштування</div><h2>Підключення та довідники</h2></div>
-    <button class="closeBtn" type="button" onclick="closeSettings()">×</button>
-  </div>
-  <div class="settingsTabs">
-    <button type="button" class="settingsTab active" data-settings-tab="suppliers" onclick="setSettingsTab('suppliers')">Постачальники</button>
-    <button type="button" class="settingsTab" data-settings-tab="salesdrive" onclick="setSettingsTab('salesdrive')">SalesDrive</button>
-  </div>
-
+  <div class="modalHead"><div><div class="eyebrow">Налаштування</div><h2>Підключення та довідники</h2></div><button class="closeBtn" type="button" onclick="closeSettings()">×</button></div>
+  <div class="settingsTabs"><button type="button" class="settingsTab active" data-settings-tab="suppliers" onclick="setSettingsTab('suppliers')">Постачальники</button><button type="button" class="settingsTab" data-settings-tab="salesdrive" onclick="setSettingsTab('salesdrive')">SalesDrive</button></div>
   <section class="settingsPane active" id="settingsSuppliers">
     <p class="settingsText">Постачальник вибирається з довідника — не потрібно вводити його вручну в кожному поверненні.</p>
-    <form class="addSupplierRow" onsubmit="addSupplier(event)">
-      <input id="newSupplierName" placeholder="Назва постачальника" autocomplete="off">
-      <button class="btn primary" type="submit">+ Додати</button>
-    </form>
+    <form class="addSupplierRow" onsubmit="addSupplier(event)"><input id="newSupplierName" placeholder="Назва постачальника" autocomplete="off"><button class="btn primary" type="submit">+ Додати</button></form>
     <div class="supplierList" id="supplierList"></div>
   </section>
-
   <section class="settingsPane" id="settingsSalesdrive">
     <form onsubmit="saveSalesDriveSettings(event)">
       <p class="settingsText">API-ключ зберігається у Script Properties і не потрапляє в Google Sheet або GitHub.</p>
       <label class="field"><span>Субдомен</span><input id="salesDriveSubdomain" autocomplete="off" placeholder="techwolves"></label>
       <label class="field"><span>API-ключ заявок</span><input id="salesDriveApiKey" type="password" autocomplete="new-password" placeholder="Залиште порожнім, щоб не змінювати"></label>
       <div class="settingsStatus" id="salesDriveStatus">Не налаштовано</div>
-      <div class="modalActions compact">
-        <button class="btn secondary" type="button" onclick="testSalesDrive()">Перевірити</button>
-        <button class="btn primary" type="submit">Зберегти</button>
-      </div>
+      <div class="modalActions compact"><button class="btn secondary" type="button" onclick="testSalesDrive()">Перевірити</button><button class="btn primary" type="submit">Зберегти</button></div>
     </form>
   </section>
 </dialog>
@@ -172,306 +132,109 @@
 
 <script>
 let model={rows:[],counts:{all:0,waiting:0,arrived:0,pickup:0,picked:0},stats:{total:0,waiting:0,picked:0,amount:0},suppliers:[],reasons:[],config:{returnStatuses:[],pickupStatuses:[]},setup:{}};
-let activeTab='all';
+let activeTab='waiting';
 let selectedId='';
 let editingId='';
-
+let isSavingReturn=false;
 const tabLabels={all:'Усі',waiting:'Очікують',arrived:'Прибули',pickup:'Очікують забору',picked:'Забрано'};
 
 function call(name,args,onSuccess,busyText){
   setBusy(true,busyText||'Завантаження…');
-  const runner=google.script.run
-    .withSuccessHandler(value=>{setBusy(false);hideError();if(onSuccess)onSuccess(value);})
-    .withFailureHandler(error=>{setBusy(false);showError(error&&error.message?error.message:String(error));});
+  const runner=google.script.run.withSuccessHandler(value=>{setBusy(false);hideError();if(onSuccess)onSuccess(value);}).withFailureHandler(error=>{setBusy(false);showError(error&&error.message?error.message:String(error));});
   if(args===undefined) runner[name](); else runner[name](args);
 }
-
 function loadData(){call('apiDashboard',undefined,data=>{model=data||model;renderAll();},'Завантаження повернень…');}
 function syncNow(){call('apiSync',undefined,data=>{model=data||model;renderAll();toast('Синхронізацію завершено');},'Синхронізація…');}
-
-function renderAll(){
-  renderSetup();
-  renderStats();
-  renderTabs();
-  renderFilterOptions();
-  renderRows();
-  if(selectedId) renderDetails();
-}
-
-function renderSetup(){
-  const s=model.setup||{};
-  const active=[];
-  if(s.salesDrive)active.push('SalesDrive');
-  if(s.novaPoshta)active.push('НП');
-  if(s.ukrposhta)active.push('Укрпошта');
-  if(s.prom)active.push('Prom');
-  document.getElementById('setupLine').textContent=active.length?'Підключено: '+active.join(' · ')+' · автооновлення щогодини':'API ще не налаштовані · ручні повернення доступні';
-}
+function renderAll(){renderSetup();renderStats();renderTabs();renderFilterOptions();renderRows();if(selectedId)renderDetails();}
+function renderSetup(){const s=model.setup||{},active=[];if(s.salesDrive)active.push('SalesDrive');if(s.novaPoshta)active.push('НП');if(s.ukrposhta)active.push('Укрпошта');if(s.prom)active.push('Prom');document.getElementById('setupLine').textContent=active.length?'Підключено: '+active.join(' · ')+' · автооновлення щогодини':'API ще не налаштовані · ручні повернення доступні';}
 
 function filteredRows(ignoreTab){
   const q=(document.getElementById('search').value||'').toLowerCase().trim();
-  const status=document.getElementById('filterStatus').value;
-  const supplier=document.getElementById('filterSupplier').value;
-  const reason=document.getElementById('filterReason').value;
-  const pickup=document.getElementById('filterPickup').value;
-  const from=document.getElementById('periodFrom').value;
-  const to=document.getElementById('periodTo').value;
+  const status=document.getElementById('filterStatus').value,supplier=document.getElementById('filterSupplier').value,reason=document.getElementById('filterReason').value,pickup=document.getElementById('filterPickup').value;
+  const from=document.getElementById('periodFrom').value,to=document.getElementById('periodTo').value;
   let rows=(model.rows||[]).slice();
-  if(!ignoreTab&&activeTab!=='all') rows=rows.filter(row=>matchesTab(row,activeTab));
-  if(q) rows=rows.filter(row=>[row.returnNumber,row.supplierOrderNumber,row.supplierName,row.productName,row.orderNumber,row.ttn].join(' ').toLowerCase().includes(q));
-  if(status) rows=rows.filter(row=>row.returnStatus===status);
-  if(supplier) rows=rows.filter(row=>row.supplierId===supplier);
-  if(reason) rows=rows.filter(row=>row.returnReason===reason);
-  if(pickup) rows=rows.filter(row=>row.supplierPickupStatus===pickup);
-  if(from||to){
-    rows=rows.filter(row=>{
-      const dateValue=row.returnDate||row.arrivedAt||row.returnStartedAt||row.createdAt||row.orderDate;
-      if(!dateValue) return false;
-      const day=localDateKey(dateValue);
-      if(from&&day<from) return false;
-      if(to&&day>to) return false;
-      return true;
-    });
-  }
+  if(!ignoreTab&&activeTab!=='all')rows=rows.filter(row=>matchesTab(row,activeTab));
+  if(q)rows=rows.filter(row=>[row.returnNumber,row.supplierOrderNumber,row.supplierName,row.productName,row.orderNumber,row.ttn,row.originalTtn,row.returnTtn].join(' ').toLowerCase().includes(q));
+  if(status)rows=rows.filter(row=>row.returnStatus===status);if(supplier)rows=rows.filter(row=>row.supplierId===supplier);if(reason)rows=rows.filter(row=>row.returnReason===reason);if(pickup)rows=rows.filter(row=>row.supplierPickupStatus===pickup);
+  if(from||to)rows=rows.filter(row=>{const dateValue=row.returnDate||row.arrivedAt||row.returnStartedAt||row.createdAt||row.orderDate;if(!dateValue)return false;const day=localDateKey(dateValue);if(from&&day<from)return false;if(to&&day>to)return false;return true;});
   return rows;
 }
-
-function matchesTab(row,tab){
-  if(tab==='waiting') return !row.supplierPickedUp&&row.returnStatus!=='completed'&&row.returnStatus!=='cancelled';
-  if(tab==='arrived') return !row.supplierPickedUp&&row.returnStatus==='arrived';
-  if(tab==='pickup') return !row.supplierPickedUp&&row.supplierPickupStatus==='waiting_pickup';
-  if(tab==='picked') return Boolean(row.supplierPickedUp);
-  return true;
-}
-
-function renderStats(){
-  const rows=filteredRows(true);
-  const total=rows.length;
-  const waiting=rows.filter(row=>matchesTab(row,'waiting')).length;
-  const picked=rows.filter(row=>row.supplierPickedUp).length;
-  const amount=rows.reduce((sum,row)=>sum+Number(row.amount||0),0);
-  document.getElementById('statTotal').textContent=total;
-  document.getElementById('statWaiting').textContent=waiting;
-  document.getElementById('statPicked').textContent=picked;
-  document.getElementById('statAmount').textContent=money(amount);
-}
-
-function renderTabs(){
-  const rows=filteredRows(true);
-  const counts={all:rows.length,waiting:0,arrived:0,pickup:0,picked:0};
-  ['waiting','arrived','pickup','picked'].forEach(tab=>counts[tab]=rows.filter(row=>matchesTab(row,tab)).length);
-  document.getElementById('tabs').innerHTML=Object.keys(tabLabels).map(tab=>`<button class="tab ${activeTab===tab?'active':''}" onclick="setTab('${tab}')">${tabLabels[tab]} <span>${counts[tab]||0}</span></button>`).join('');
-}
-
+function matchesTab(row,tab){if(tab==='waiting')return !row.supplierPickedUp&&row.returnStatus!=='completed'&&row.returnStatus!=='cancelled';if(tab==='arrived')return !row.supplierPickedUp&&row.returnStatus==='arrived';if(tab==='pickup')return !row.supplierPickedUp&&row.supplierPickupStatus==='waiting_pickup';if(tab==='picked')return Boolean(row.supplierPickedUp);return true;}
+function renderStats(){const rows=filteredRows(true),total=rows.length,waiting=rows.filter(row=>matchesTab(row,'waiting')).length,picked=rows.filter(row=>row.supplierPickedUp).length,amount=rows.reduce((sum,row)=>sum+Number(row.amount||0),0);document.getElementById('statTotal').textContent=total;document.getElementById('statWaiting').textContent=waiting;document.getElementById('statPicked').textContent=picked;document.getElementById('statAmount').textContent=money(amount);}
+function renderTabs(){const rows=filteredRows(true),counts={all:rows.length,waiting:0,arrived:0,pickup:0,picked:0};['waiting','arrived','pickup','picked'].forEach(tab=>counts[tab]=rows.filter(row=>matchesTab(row,tab)).length);document.getElementById('tabs').innerHTML=Object.keys(tabLabels).map(tab=>`<button class="tab ${activeTab===tab?'active':''}" onclick="setTab('${tab}')">${tabLabels[tab]} <span>${counts[tab]||0}</span></button>`).join('');}
 function setTab(tab){activeTab=tab;renderTabs();renderRows();}
 
-function renderFilterOptions(){
-  setSelectOptions('filterStatus','Усі статуси',(model.config.returnStatuses||[]).map(item=>[item.id,item.label]));
-  setSelectOptions('filterSupplier','Усі постачальники',(model.suppliers||[]).map(item=>[item.id,item.name]));
-  setSelectOptions('filterReason','Усі причини',(model.reasons||[]).map(item=>[item.id,item.name]));
-  setSelectOptions('filterPickup','Усі варіанти',(model.config.pickupStatuses||[]).map(item=>[item.id,item.label]));
-  setSelectOptions('formSupplier','Оберіть постачальника',(model.suppliers||[]).map(item=>[item.id,item.name]),true);
-  setSelectOptions('formReason','Не вказано',(model.reasons||[]).map(item=>[item.id,item.name]));
-  setSelectOptions('formStatus','Оберіть статус',(model.config.returnStatuses||[]).map(item=>[item.id,item.label]),true);
-  renderSupplierList();
-  updateFilterDot();
-}
-
-function setSelectOptions(id,firstLabel,items,required){
-  const el=document.getElementById(id);
-  if(!el)return;
-  const current=el.value;
-  const firstValue=required?'':'';
-  el.innerHTML=`<option value="${firstValue}">${esc(firstLabel)}</option>`+items.map(item=>`<option value="${attr(item[0])}">${esc(item[1])}</option>`).join('');
-  if(items.some(item=>String(item[0])===current))el.value=current;
-}
+function renderFilterOptions(){setSelectOptions('filterStatus','Усі статуси',(model.config.returnStatuses||[]).map(item=>[item.id,item.label]));setSelectOptions('filterSupplier','Усі постачальники',(model.suppliers||[]).map(item=>[item.id,item.name]));setSelectOptions('filterReason','Усі причини',(model.reasons||[]).map(item=>[item.id,item.name]));setSelectOptions('filterPickup','Усі варіанти',(model.config.pickupStatuses||[]).map(item=>[item.id,item.label]));setSelectOptions('formSupplier','Оберіть постачальника',(model.suppliers||[]).map(item=>[item.id,item.name]),true);setSelectOptions('formReason','Не вказано',(model.reasons||[]).map(item=>[item.id,item.name]));setSelectOptions('formStatus','Оберіть статус',(model.config.returnStatuses||[]).map(item=>[item.id,item.label]),true);renderSupplierList();updateFilterDot();}
+function setSelectOptions(id,firstLabel,items,required){const el=document.getElementById(id);if(!el)return;const current=el.value;el.innerHTML=`<option value="">${esc(firstLabel)}</option>`+items.map(item=>`<option value="${attr(item[0])}">${esc(item[1])}</option>`).join('');if(items.some(item=>String(item[0])===current))el.value=current;}
 
 function renderRows(){
-  updateFilterDot();
-  const rows=filteredRows(false);
-  const head=`<div class="tableRow tableHead"><div class="checkCell"><input type="checkbox" disabled aria-label="Вибрати всі"></div><div>№ повернення</div><div>Замовлення</div><div>Постачальник</div><div>Товар</div><div>Причина</div><div>Статус</div><div>Забір</div><div class="right">Сума</div><div>Дата</div><div></div></div>`;
+  updateFilterDot();const rows=filteredRows(false);const head=`<div class="tableRow tableHead"><div class="checkCell"><input type="checkbox" disabled aria-label="Вибрати всі"></div><div>№ повернення</div><div>Замовлення</div><div>Постачальник</div><div>Товар</div><div>Причина</div><div>Статус</div><div>Забір</div><div class="right">Сума</div><div>Дата</div><div></div></div>`;
   document.getElementById('desktopTable').innerHTML=head+(rows.length?rows.map(desktopRowHtml).join(''):`<div class="emptyState">${emptyStateHtml()}</div>`);
   document.getElementById('mobileCards').innerHTML=rows.length?rows.map(mobileCardHtml).join(''):`<div class="emptyState mobileEmpty">${emptyStateHtml()}</div>`;
   document.getElementById('listFooter').textContent=rows.length?'Показано '+rows.length+' '+plural(rows.length,'повернення','повернення','повернень'):'';
 }
-
-function desktopRowHtml(row){
-  const reason=reasonLabel(row.returnReason,row.returnReasonComment);
-  const product=productMini(row);
-  const order=orderLink(row);
-  const pickup=pickupCell(row);
-  return `<div class="tableRow dataRow ${selectedId===row.id?'selected':''}" onclick="openDetails('${jsq(row.id)}')">
-    <div class="checkCell" onclick="event.stopPropagation()"><input type="checkbox" aria-label="Вибрати ${attr(row.returnNumber)}"></div>
-    <div><strong>${esc(row.returnNumber||'—')}</strong><div class="cellMeta">${esc(sourceLabel(row.source))}</div></div>
-    <div>${order}</div>
-    <div><strong>${esc(row.supplierName||'—')}</strong></div>
-    <div>${product}</div>
-    <div><span class="reasonPill">${esc(reason||'—')}</span></div>
-    <div>${statusBadge(row.returnStatus)}</div>
-    <div>${pickup}</div>
-    <div class="right moneyCell">${money(row.amount)}</div>
-    <div>${dateCell(row.returnDate||row.arrivedAt||row.returnStartedAt)}</div>
-    <div class="actionsCell" onclick="event.stopPropagation()"><button class="dotsBtn" type="button" onclick="openDetails('${jsq(row.id)}')">•••</button></div>
-  </div>`;
-}
-
-function mobileCardHtml(row){
-  return `<article class="returnCard" onclick="openDetails('${jsq(row.id)}')">
-    <div class="cardTop"><strong>${esc(row.returnNumber||'—')}</strong><strong>${money(row.amount)}</strong></div>
-    <div class="cardSupplier">${esc(row.supplierName||'Постачальник не вказаний')}</div>
-    <div class="cardOrder">${orderLink(row)}</div>
-    ${row.productName?`<div class="cardProduct">${productMini(row)}</div>`:''}
-    <div class="cardBadges"><span class="reasonPill">${esc(reasonLabel(row.returnReason,row.returnReasonComment)||'Причина не вказана')}</span>${statusBadge(row.returnStatus)}${pickupBadge(row.supplierPickupStatus)}</div>
-    <div class="cardBottom"><span>${fmtDateTimeShort(row.returnDate||row.arrivedAt||row.returnStartedAt)}</span>${row.supplierPickedUp?`<span class="pickedTime">Забрано ${fmtDateTimeShort(row.supplierPickedUpAt)}</span>`:''}</div>
-    ${!row.supplierPickedUp&&row.supplierPickupStatus==='waiting_pickup'?`<button class="btn pickupAction" type="button" onclick="event.stopPropagation();setPickedUp('${jsq(row.id)}',true)">✓ Позначити як забране</button>`:''}
-  </article>`;
-}
-
-function emptyStateHtml(){
-  return `<div class="emptyIcon">↩</div><strong>Повернень за цими умовами немає</strong><span>Змініть фільтри або додайте повернення вручну.</span>`;
-}
-
-function orderLink(row){
-  const number=row.supplierOrderNumber||'';
-  if(!number)return '<span class="muted">—</span>';
-  if(row.supplierOrderUrl)return `<a class="orderLink" href="${attr(row.supplierOrderUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">#${esc(number)} ↗</a><div class="cellMeta">Відкрити у постачальника</div>`;
-  return `<strong>#${esc(number)}</strong>`;
-}
-
-function productMini(row){
-  if(!row.productName&&!row.productImage)return '<span class="muted">—</span>';
-  const image=row.productImage?`<img src="${attr(row.productImage)}" alt="" onerror="this.closest('.productMini').classList.add('imageError');this.remove()">`:'<span class="imagePlaceholder">▧</span>';
-  return `<div class="productMini">${image}<div><strong>${esc(row.productName||'Товар')}</strong>${row.carrier||row.ttn?`<div class="cellMeta">${esc([row.carrier,row.ttn].filter(Boolean).join(' · '))}</div>`:''}</div></div>`;
-}
-
-function statusBadge(id){
-  const item=(model.config.returnStatuses||[]).find(x=>x.id===id);
-  return item?`<span class="badge ${attr(item.tone)}">${esc(item.label)}</span>`:'<span class="badge neutral">Не визначено</span>';
-}
-function pickupBadge(id){
-  const item=(model.config.pickupStatuses||[]).find(x=>x.id===id);
-  return item?`<span class="badge ${attr(item.tone)}">${esc(item.label)}</span>`:'<span class="badge neutral">—</span>';
-}
-function pickupCell(row){
-  return `<div>${pickupBadge(row.supplierPickupStatus)}${row.supplierPickedUpAt?`<div class="cellMeta">${fmtDateTimeShort(row.supplierPickedUpAt)}</div>`:(row.daysWaiting?`<div class="cellMeta ${row.daysWaiting>=3?'dangerText':''}">${row.daysWaiting} дн. очікування</div>`:'')}</div>`;
-}
+function desktopRowHtml(row){const reason=reasonLabel(row.returnReason,row.returnReasonComment),product=productMini(row),order=orderLink(row),pickup=pickupCell(row);return `<div class="tableRow dataRow ${selectedId===row.id?'selected':''}" onclick="openDetails('${jsq(row.id)}')"><div class="checkCell" onclick="event.stopPropagation()"><input type="checkbox"></div><div><strong>${esc(row.returnNumber||'—')}</strong><div class="cellMeta">${esc(sourceLabel(row.source))}</div></div><div>${order}</div><div><strong>${esc(row.supplierName||'—')}</strong>${row.supplierNotified?`<div class="cellMeta">✓ Сповіщено</div>`:''}</div><div>${product}</div><div><span class="reasonPill">${esc(reason||'—')}</span></div><div>${statusBadge(row.returnStatus)}</div><div>${pickup}</div><div class="right moneyCell">${money(row.amount)}</div><div>${dateCell(row.returnDate||row.arrivedAt||row.returnStartedAt)}</div><div class="actionsCell" onclick="event.stopPropagation()"><button class="dotsBtn" type="button" onclick="openDetails('${jsq(row.id)}')">•••</button></div></div>`;}
+function mobileCardHtml(row){return `<article class="returnCard" onclick="openDetails('${jsq(row.id)}')"><div class="cardTop"><strong>${esc(row.returnNumber||'—')}</strong><strong>${money(row.amount)}</strong></div><div class="cardSupplier">${esc(row.supplierName||'Постачальник не вказаний')}${row.supplierNotified?' · ✓ сповіщено':''}</div><div class="cardOrder">${orderLink(row)}</div>${row.productName?`<div class="cardProduct">${productMini(row)}</div>`:''}<div class="cardBadges"><span class="reasonPill">${esc(reasonLabel(row.returnReason,row.returnReasonComment)||'Причина не вказана')}</span>${statusBadge(row.returnStatus)}${pickupBadge(row.supplierPickupStatus)}</div><div class="cardBottom"><span>${fmtDateTimeShort(row.returnDate||row.arrivedAt||row.returnStartedAt)}</span>${row.supplierPickedUp?`<span class="pickedTime">Забрано ${fmtDateTimeShort(row.supplierPickedUpAt)}</span>`:''}</div>${!row.supplierPickedUp&&row.supplierPickupStatus==='waiting_pickup'?`<button class="btn pickupAction" type="button" onclick="event.stopPropagation();setPickedUp('${jsq(row.id)}',true)">✓ Позначити як забране</button>`:''}</article>`;}
+function emptyStateHtml(){return `<div class="emptyIcon">↩</div><strong>Повернень за цими умовами немає</strong><span>Змініть фільтри або додайте повернення вручну.</span>`;}
+function orderLink(row){const number=row.supplierOrderNumber||'';if(!number)return '<span class="muted">—</span>';if(row.supplierOrderUrl)return `<a class="orderLink" href="${attr(row.supplierOrderUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">#${esc(number)} ↗</a><div class="cellMeta">Відкрити у постачальника</div>`;return `<strong>#${esc(number)}</strong>`;}
+function productMini(row){if(!row.productName&&!row.productImage)return '<span class="muted">—</span>';const image=row.productImage?`<img src="${attr(row.productImage)}" alt="" onerror="this.closest('.productMini').classList.add('imageError');this.remove()">`:'<span class="imagePlaceholder">▧</span>';return `<div class="productMini">${image}<div><strong>${esc(row.productName||'Товар')}</strong></div></div>`;}
+function statusBadge(id){const item=(model.config.returnStatuses||[]).find(x=>x.id===id);return item?`<span class="badge ${attr(item.tone)}">${esc(item.label)}</span>`:'<span class="badge neutral">Не визначено</span>';}
+function pickupBadge(id){const item=(model.config.pickupStatuses||[]).find(x=>x.id===id);return item?`<span class="badge ${attr(item.tone)}">${esc(item.label)}</span>`:'<span class="badge neutral">—</span>';}
+function pickupCell(row){return `<div>${pickupBadge(row.supplierPickupStatus)}${row.supplierPickedUpAt?`<div class="cellMeta">${fmtDateTimeShort(row.supplierPickedUpAt)}</div>`:(row.daysWaiting?`<div class="cellMeta ${row.daysWaiting>=3?'dangerText':''}">${row.daysWaiting} дн. очікування</div>`:'')}</div>`;}
 function dateCell(value){return value?`<strong>${fmtDate(value)}</strong><div class="cellMeta">${fmtTime(value)}</div>`:'<span class="muted">—</span>';}
 
 function openDetails(id){selectedId=id;renderRows();renderDetails();document.getElementById('drawerBackdrop').classList.add('open');const drawer=document.getElementById('detailsDrawer');drawer.classList.add('open');drawer.setAttribute('aria-hidden','false');}
 function closeDetails(){selectedId='';document.getElementById('drawerBackdrop').classList.remove('open');const drawer=document.getElementById('detailsDrawer');drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');renderRows();}
-
 function renderDetails(){
-  const row=(model.rows||[]).find(item=>item.id===selectedId);
-  if(!row){closeDetails();return;}
-  document.getElementById('detailNumber').textContent=row.returnNumber||'Повернення';
-  const productBlock=(row.productName||row.productImage)?`<section class="detailSection"><h3>Товар</h3><div class="detailProduct">${row.productImage?`<img src="${attr(row.productImage)}" alt="">`:'<div class="detailImagePlaceholder">▧</div>'}<div><strong>${esc(row.productName||'Товар')}</strong>${row.carrier||row.ttn?`<div class="detailMuted">${esc([row.carrier,row.ttn].filter(Boolean).join(' · '))}</div>`:''}</div></div></section>`:'';
-  const pickupAction=row.supplierPickedUp
-    ?`<div class="pickedPanel"><div><span class="badge success">Забрано</span><strong>${fmtDateTime(row.supplierPickedUpAt)}</strong></div><div class="pickupMenuWrap"><button class="dotsBtn" type="button" onclick="togglePickupMenu()">•••</button><div class="pickupMenu" id="pickupMenu"><button type="button" onclick="setPickedUp('${jsq(row.id)}',false)">Скасувати відмітку про забір</button></div></div></div>`
-    :row.supplierPickupStatus==='waiting_pickup'
-      ?`<span class="badge warning">Очікує забору</span><button class="btn pickupAction detailPickup" type="button" onclick="setPickedUp('${jsq(row.id)}',true)">✓ Позначити як забране постачальником</button><p class="detailHint">Дата та час забору зафіксуються автоматично.</p>`
-      :`<span class="badge danger-soft">Не передано</span><p class="detailHint">Коли повернення прибуде, змініть статус на «Прибуло» — воно перейде в контроль забору.</p>`;
-
-  document.getElementById('drawerBody').innerHTML=`
-    <div class="detailHeaderLine"><div>${statusBadge(row.returnStatus)}</div><button class="btn secondary smallBtn" type="button" onclick="openReturnForm('${jsq(row.id)}')">Редагувати</button></div>
+  const row=(model.rows||[]).find(item=>item.id===selectedId);if(!row){closeDetails();return;}document.getElementById('detailNumber').textContent=row.returnNumber||'Повернення';
+  const productBlock=(row.productName||row.productImage)?`<section class="detailSection"><h3>Товар</h3><div class="detailProduct">${row.productImage?`<img src="${attr(row.productImage)}" alt="">`:'<div class="detailImagePlaceholder">▧</div>'}<div><strong>${esc(row.productName||'Товар')}</strong></div></div></section>`:'';
+  const pickupAction=row.supplierPickedUp?`<div class="pickedPanel"><div><span class="badge success">Забрано</span><strong>${fmtDateTime(row.supplierPickedUpAt)}</strong></div><div class="pickupMenuWrap"><button class="dotsBtn" type="button" onclick="togglePickupMenu()">•••</button><div class="pickupMenu" id="pickupMenu"><button type="button" onclick="setPickedUp('${jsq(row.id)}',false)">Скасувати відмітку про забір</button></div></div></div>`:row.supplierPickupStatus==='waiting_pickup'?`<span class="badge warning">Очікує забору</span><button class="btn pickupAction detailPickup" type="button" onclick="setPickedUp('${jsq(row.id)}',true)">✓ Позначити як забране постачальником</button><p class="detailHint">Дата та час забору зафіксуються автоматично.</p>`:`<span class="badge neutral">Ще в дорозі / не передано</span><p class="detailHint">«Прибуло» встановлюється лише після підтвердження логістики, що повернення фактично прибуло.</p>`;
+  const notified=row.supplierNotified?`<div><span class="badge success">Постачальника сповіщено</span><div class="detailMuted">${fmtDateTime(row.supplierNotifiedAt)}</div><button class="btn secondary smallBtn" type="button" onclick="setSupplierNotified('${jsq(row.id)}',false)">Скасувати відмітку</button></div>`:`<button class="btn secondary" type="button" onclick="setSupplierNotified('${jsq(row.id)}',true)">✓ Позначити: постачальника сповіщено</button>`;
+  document.getElementById('drawerBody').innerHTML=`<div class="detailHeaderLine"><div>${statusBadge(row.returnStatus)}</div><button class="btn secondary smallBtn" type="button" onclick="openReturnForm('${jsq(row.id)}')">Редагувати</button></div>
     <section class="detailSection"><h3>Основна інформація</h3><div class="detailGrid"><span>Постачальник</span><strong>${esc(row.supplierName||'—')}</strong><span>Замовлення</span><div>${orderLink(row)}</div>${row.orderNumber?`<span>Замовлення джерела</span><strong>#${esc(row.orderNumber)}</strong>`:''}</div></section>
     ${productBlock}
-    <section class="detailSection"><h3>Повернення</h3><div class="detailGrid"><span>Причина</span><strong>${esc(reasonLabel(row.returnReason,row.returnReasonComment)||'—')}</strong><span>Статус</span><div>${statusBadge(row.returnStatus)}</div><span>Сума</span><strong>${money(row.amount)}</strong><span>Дата повернення</span><strong>${row.returnDate?fmtDateTime(row.returnDate):'—'}</strong>${row.deliveryStatus?`<span>Логістика</span><div><strong>${esc(row.deliveryStatus)}</strong>${row.ttn?`<div class="detailMuted">${esc(row.ttn)}</div>`:''}</div>`:''}</div></section>
-    <section class="detailSection pickupSection"><h3>Забір постачальником</h3>${pickupAction}</section>
-  `;
+    <section class="detailSection"><h3>Дані для постачальника</h3><div class="detailGrid"><span>Першочергова ТТН</span><strong>${esc(row.originalTtn||row.ttn||'—')}</strong><span>ТТН повернення</span><strong>${esc(row.returnTtn||'—')}</strong><span>Замовлення на сайті</span><div>${orderLink(row)}</div><span>Назва товару</span><strong>${esc(row.productName||'—')}</strong></div><div class="modalActions compact"><button class="btn primary" type="button" onclick="copySupplierData('${jsq(row.id)}')">⧉ Скопіювати все</button>${notified}</div></section>
+    <section class="detailSection"><h3>Повернення</h3><div class="detailGrid"><span>Причина</span><strong>${esc(reasonLabel(row.returnReason,row.returnReasonComment)||'—')}</strong><span>Статус</span><div>${statusBadge(row.returnStatus)}</div><span>Сума</span><strong>${money(row.amount)}</strong><span>Дата повернення</span><strong>${row.returnDate?fmtDateTime(row.returnDate):'—'}</strong>${row.deliveryStatus?`<span>Логістика</span><div><strong>${esc(row.deliveryStatus)}</strong>${row.returnTtn||row.ttn?`<div class="detailMuted">${esc(row.returnTtn||row.ttn)}</div>`:''}</div>`:''}</div></section>
+    <section class="detailSection pickupSection"><h3>Забір постачальником</h3>${pickupAction}</section>`;
 }
-
 function togglePickupMenu(){const el=document.getElementById('pickupMenu');if(el)el.classList.toggle('open');}
-function setPickedUp(id,taken){call('apiSetSupplierPickedUp',{id:id,taken:taken},data=>{model=data;renderAll();if(taken)toast('Забір постачальником зафіксовано');else toast('Відмітку про забір скасовано');},taken?'Фіксуємо забір…':'Скасовуємо відмітку…');}
+function replaceModelRow(updated){if(!updated||!updated.id)return;const i=(model.rows||[]).findIndex(row=>row.id===updated.id);if(i>=0)model.rows[i]=Object.assign({},model.rows[i],updated);else model.rows.unshift(updated);}
+function quickRowAction(name,args,optimistic,message){const row=(model.rows||[]).find(item=>item.id===args.id);const previous=row?Object.assign({},row):null;if(row&&optimistic)optimistic(row);renderAll();const runner=google.script.run.withSuccessHandler(updated=>{replaceModelRow(updated);hideError();renderAll();toast(message);}).withFailureHandler(error=>{if(previous)replaceModelRow(previous);renderAll();showError(error&&error.message?error.message:String(error));});runner[name](args);}
+function setPickedUp(id,taken){quickRowAction('apiSetSupplierPickedUp',{id:id,taken:taken},row=>{row.supplierPickedUp=taken;row.supplierPickedUpAt=taken?new Date().toISOString():'';row.supplierPickupStatus=taken?'picked_up':(row.returnStatus==='arrived'?'waiting_pickup':'not_handed_over');},taken?'Забір постачальником зафіксовано':'Відмітку про забір скасовано');}
+function setSupplierNotified(id,notified){quickRowAction('apiSetSupplierNotified',{id:id,notified:notified},row=>{row.supplierNotified=notified;row.supplierNotifiedAt=notified?new Date().toISOString():'';},notified?'Позначено: постачальника сповіщено':'Відмітку сповіщення скасовано');}
+async function copySupplierData(id){const row=(model.rows||[]).find(item=>item.id===id);if(!row)return;const orderText=[row.supplierOrderNumber?('#'+row.supplierOrderNumber):'',row.supplierOrderUrl||''].filter(Boolean).join(' ');const text=['Першочергова ТТН: '+(row.originalTtn||row.ttn||'—'),'ТТН повернення: '+(row.returnTtn||'—'),'Замовлення постачальника: '+(orderText||'—'),'Товар: '+(row.productName||'—')].join('\n');try{await navigator.clipboard.writeText(text);}catch(_){const area=document.createElement('textarea');area.value=text;document.body.appendChild(area);area.select();document.execCommand('copy');area.remove();}toast('Дані скопійовано');}
 
-function openReturnForm(id){
-  editingId=id||'';
-  const row=editingId?(model.rows||[]).find(item=>item.id===editingId):null;
-  document.getElementById('returnForm').reset();
-  document.getElementById('returnId').value=row?row.id:'';
-  document.getElementById('existingProductImage').value=row?row.productImage||'':'';
-  document.getElementById('returnFormEyebrow').textContent=row?'Редагування':'Нове повернення';
-  document.getElementById('returnFormTitle').textContent=row?'Редагувати повернення':'Додати повернення';
-  renderFilterOptions();
-  if(row){
-    document.getElementById('formSupplier').value=row.supplierId||'';
-    document.getElementById('formSupplierOrder').value=row.supplierOrderNumber||'';
-    document.getElementById('formSupplierOrderUrl').value=row.supplierOrderUrl||'';
-    document.getElementById('formReason').value=row.returnReason||'';
-    document.getElementById('formReasonComment').value=row.returnReasonComment||'';
-    document.getElementById('formAmount').value=row.amount||'';
-    document.getElementById('formStatus').value=row.returnStatus||'expected';
-    document.getElementById('formReturnDate').value=toDatetimeLocal(row.returnDate);
-    document.getElementById('formProductName').value=row.productName||'';
-    document.getElementById('formNote').value=row.note||'';
-    renderImagePreview(row.productImage||'');
-  }else{
-    document.getElementById('formStatus').value='expected';
-    renderImagePreview('');
-  }
-  toggleOtherReason();
-  document.getElementById('returnDialog').showModal();
-}
-function closeReturnForm(){document.getElementById('returnDialog').close();editingId='';}
-
+function openReturnForm(id){editingId=id||'';const row=editingId?(model.rows||[]).find(item=>item.id===editingId):null;document.getElementById('returnForm').reset();document.getElementById('returnId').value=row?row.id:'';document.getElementById('existingProductImage').value=row?row.productImage||'':'';document.getElementById('returnFormEyebrow').textContent=row?'Редагування':'Нове повернення';document.getElementById('returnFormTitle').textContent=row?'Редагувати повернення':'Додати повернення';renderFilterOptions();if(row){document.getElementById('formSupplier').value=row.supplierId||'';document.getElementById('formSupplierOrder').value=row.supplierOrderNumber||'';document.getElementById('formSupplierOrderUrl').value=row.supplierOrderUrl||'';document.getElementById('formOriginalTtn').value=row.originalTtn||row.ttn||'';document.getElementById('formReturnTtn').value=row.returnTtn||'';document.getElementById('formReason').value=row.returnReason||'';document.getElementById('formReasonComment').value=row.returnReasonComment||'';document.getElementById('formAmount').value=row.amount||'';document.getElementById('formStatus').value=row.returnStatus||'in_transit';document.getElementById('formReturnDate').value=toDatetimeLocal(row.returnDate);document.getElementById('formProductName').value=row.productName||'';document.getElementById('formNote').value=row.note||'';renderImagePreview(row.productImage||'');}else{document.getElementById('formStatus').value='in_transit';renderImagePreview('');}toggleOtherReason();document.getElementById('returnDialog').showModal();}
+function closeReturnForm(){if(isSavingReturn)return;document.getElementById('returnDialog').close();editingId='';}
 async function saveReturnForm(event){
-  event.preventDefault();
-  const file=document.getElementById('formProductImageFile').files[0];
-  if(file&&file.size>3*1024*1024){showError('Фото має бути не більше 3 МБ.');return;}
-  const payload={
-    id:document.getElementById('returnId').value,
-    supplierId:document.getElementById('formSupplier').value,
-    supplierOrderNumber:document.getElementById('formSupplierOrder').value,
-    supplierOrderUrl:document.getElementById('formSupplierOrderUrl').value,
-    returnReason:document.getElementById('formReason').value,
-    returnReasonComment:document.getElementById('formReasonComment').value,
-    amount:document.getElementById('formAmount').value,
-    returnStatus:document.getElementById('formStatus').value,
-    returnDate:fromDatetimeLocal(document.getElementById('formReturnDate').value),
-    productName:document.getElementById('formProductName').value,
-    productImage:document.getElementById('existingProductImage').value,
-    note:document.getElementById('formNote').value
-  };
-  if(file)payload.productImageData=await fileToDataUrl(file);
-  const wasEditing=Boolean(editingId);
-  const method=wasEditing?'apiUpdateReturn':'apiCreateReturn';
-  call(method,payload,data=>{model=data;closeReturnForm();renderAll();toast(wasEditing?'Повернення оновлено':'Повернення створено');},'Зберігаємо…');
+  event.preventDefault();if(isSavingReturn)return;const file=document.getElementById('formProductImageFile').files[0];if(file&&file.size>3*1024*1024){showError('Фото має бути не більше 3 МБ.');return;}
+  const payload={id:document.getElementById('returnId').value,supplierId:document.getElementById('formSupplier').value,supplierOrderNumber:document.getElementById('formSupplierOrder').value,supplierOrderUrl:document.getElementById('formSupplierOrderUrl').value,originalTtn:document.getElementById('formOriginalTtn').value,returnTtn:document.getElementById('formReturnTtn').value,returnReason:document.getElementById('formReason').value,returnReasonComment:document.getElementById('formReasonComment').value,amount:document.getElementById('formAmount').value,returnStatus:document.getElementById('formStatus').value,returnDate:fromDatetimeLocal(document.getElementById('formReturnDate').value),productName:document.getElementById('formProductName').value,productImage:document.getElementById('existingProductImage').value,note:document.getElementById('formNote').value};
+  if(file)payload.productImageData=await fileToDataUrl(file);const wasEditing=Boolean(editingId),method=wasEditing?'apiUpdateReturn':'apiCreateReturn',btn=document.getElementById('returnSubmitBtn');isSavingReturn=true;btn.disabled=true;btn.textContent='Зберігаємо…';setBusy(true,'Зберігаємо…');
+  const runner=google.script.run.withSuccessHandler(updated=>{isSavingReturn=false;btn.disabled=false;btn.textContent='Зберегти повернення';setBusy(false);replaceModelRow(updated);document.getElementById('returnDialog').close();editingId='';renderAll();toast(wasEditing?'Повернення оновлено':'Повернення створено');}).withFailureHandler(error=>{isSavingReturn=false;btn.disabled=false;btn.textContent='Зберегти повернення';setBusy(false);showError(error&&error.message?error.message:String(error));});runner[method](payload);
 }
-
 function toggleOtherReason(){document.getElementById('otherReasonField').classList.toggle('hidden',document.getElementById('formReason').value!=='other');}
 function previewImageFile(){const file=document.getElementById('formProductImageFile').files[0];if(!file){renderImagePreview(document.getElementById('existingProductImage').value);return;}if(file.size>3*1024*1024){showError('Фото має бути не більше 3 МБ.');document.getElementById('formProductImageFile').value='';return;}const reader=new FileReader();reader.onload=()=>renderImagePreview(reader.result);reader.readAsDataURL(file);}
 function renderImagePreview(src){const el=document.getElementById('imagePreview');el.innerHTML=src?`<img src="${attr(src)}" alt="Попередній перегляд">`:'<span>Фото</span>';}
 function fileToDataUrl(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file);});}
 
-function openSettings(){
-  renderSupplierList();
-  setSettingsTab('suppliers');
-  call('apiSalesDriveSettings',undefined,state=>{
-    document.getElementById('salesDriveSubdomain').value=state.subdomain||'techwolves';
-    document.getElementById('salesDriveApiKey').value='';
-    renderSalesDriveState(state);
-    document.getElementById('settingsDialog').showModal();
-  },'Відкриваємо налаштування…');
-}
+function openSettings(){renderSupplierList();setSettingsTab('suppliers');call('apiSalesDriveSettings',undefined,state=>{document.getElementById('salesDriveSubdomain').value=state.subdomain||'techwolves';document.getElementById('salesDriveApiKey').value='';renderSalesDriveState(state);document.getElementById('settingsDialog').showModal();},'Відкриваємо налаштування…');}
 function closeSettings(){document.getElementById('settingsDialog').close();}
 function setSettingsTab(tab){document.querySelectorAll('.settingsTab').forEach(el=>el.classList.toggle('active',el.dataset.settingsTab===tab));document.getElementById('settingsSuppliers').classList.toggle('active',tab==='suppliers');document.getElementById('settingsSalesdrive').classList.toggle('active',tab==='salesdrive');}
 function renderSupplierList(){const el=document.getElementById('supplierList');if(!el)return;el.innerHTML=(model.suppliers||[]).length?(model.suppliers||[]).map(item=>`<div class="supplierItem"><span class="supplierAvatar">${esc(item.name.charAt(0).toUpperCase())}</span><strong>${esc(item.name)}</strong></div>`).join(''):'<div class="supplierEmpty">Постачальників ще немає</div>';}
 function addSupplier(event){event.preventDefault();const name=document.getElementById('newSupplierName').value.trim();if(!name)return;call('apiSaveSupplier',{name:name},data=>{model=data;document.getElementById('newSupplierName').value='';renderAll();toast('Постачальника додано');},'Додаємо постачальника…');}
-
 function renderSalesDriveState(state){const parts=[state.configured?'API-ключ збережено':'API-ключ не збережено'];if(state.lastSync)parts.push('остання синхронізація '+fmtDateTime(state.lastSync));document.getElementById('salesDriveStatus').textContent=parts.join(' · ');}
 function saveSalesDriveSettings(event){event.preventDefault();const payload={subdomain:document.getElementById('salesDriveSubdomain').value,apiKey:document.getElementById('salesDriveApiKey').value};call('apiSaveSalesDriveSettings',payload,state=>{renderSalesDriveState(state);document.getElementById('salesDriveApiKey').value='';loadData();toast('Налаштування SalesDrive збережено');},'Зберігаємо SalesDrive…');}
-function testSalesDrive(){const key=document.getElementById('salesDriveApiKey').value.trim();const subdomain=document.getElementById('salesDriveSubdomain').value.trim();const test=()=>call('apiTestSalesDrive',undefined,result=>{renderSalesDriveState(result.state||{});document.getElementById('salesDriveStatus').textContent='Підключення працює'+(result.sampleExternalId?' · приклад №'+result.sampleExternalId:'');toast('SalesDrive відповідає');},'Перевіряємо SalesDrive…');if(key){call('apiSaveSalesDriveSettings',{subdomain:subdomain,apiKey:key},()=>{document.getElementById('salesDriveApiKey').value='';test();},'Зберігаємо ключ…');}else test();}
-
+function testSalesDrive(){const key=document.getElementById('salesDriveApiKey').value.trim(),subdomain=document.getElementById('salesDriveSubdomain').value.trim();const test=()=>call('apiTestSalesDrive',undefined,result=>{renderSalesDriveState(result.state||{});document.getElementById('salesDriveStatus').textContent='Підключення працює'+(result.sampleExternalId?' · приклад №'+result.sampleExternalId:'');toast('SalesDrive відповідає');},'Перевіряємо SalesDrive…');if(key){call('apiSaveSalesDriveSettings',{subdomain:subdomain,apiKey:key},()=>{document.getElementById('salesDriveApiKey').value='';test();},'Зберігаємо ключ…');}else test();}
 function toggleFilters(){document.getElementById('filterPanel').classList.toggle('open');}
 function resetFilters(){['filterStatus','filterSupplier','filterReason','filterPickup'].forEach(id=>document.getElementById(id).value='');document.getElementById('periodFrom').value='';document.getElementById('periodTo').value='';document.getElementById('search').value='';renderAll();}
 function updateFilterDot(){const active=['filterStatus','filterSupplier','filterReason','filterPickup'].some(id=>document.getElementById(id)&&document.getElementById(id).value)||document.getElementById('periodFrom').value||document.getElementById('periodTo').value;document.getElementById('filterDot').classList.toggle('active',Boolean(active));}
-
 function reasonLabel(id,comment){const reason=(model.reasons||[]).find(item=>item.id===id);if(!reason)return id==='other'?(comment||'Інше'):'';return id==='other'&&comment?reason.name+': '+comment:reason.name;}
 function sourceLabel(source){return ({manual:'Вручну',salesdrive:'SalesDrive',nova_poshta:'Нова Пошта',ukrposhta:'Укрпошта',meest:'Meest',rozetka:'Rozetka',api:'API'})[source]||source||'';}
 function money(value){const number=Number(value||0);return new Intl.NumberFormat('uk-UA',{maximumFractionDigits:number%1?2:0}).format(number)+' ₴';}
 function fmtDate(value){if(!value)return'';const d=new Date(value);return isNaN(d)?'':d.toLocaleDateString('uk-UA');}
 function fmtTime(value){if(!value)return'';const d=new Date(value);return isNaN(d)?'':d.toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});}
 function fmtDateTime(value){if(!value)return'—';const d=new Date(value);return isNaN(d)?'—':d.toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
-function fmtDateTimeShort(value){if(!value)return'—';const d=new Date(value);return isNaN(d)?'—':d.toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+function fmtDateTimeShort(value){return fmtDateTime(value);}
 function localDateKey(value){const d=new Date(value);if(isNaN(d))return'';const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`;}
 function toDatetimeLocal(value){if(!value)return'';const d=new Date(value);if(isNaN(d))return'';const pad=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;}
 function fromDatetimeLocal(value){if(!value)return'';const d=new Date(value);return isNaN(d)?'':d.toISOString();}
@@ -483,7 +246,6 @@ function showError(text){const el=document.getElementById('error');el.textConten
 function hideError(){document.getElementById('error').classList.remove('show');}
 function toast(text){const el=document.getElementById('toast');el.textContent=text;el.classList.add('show');clearTimeout(window.__toastTimer);window.__toastTimer=setTimeout(()=>el.classList.remove('show'),2400);}
 function setBusy(show,text){document.getElementById('busyText').textContent=text||'Завантаження…';document.getElementById('busyOverlay').classList.toggle('show',Boolean(show));}
-
 loadData();
 </script>
 </body>
