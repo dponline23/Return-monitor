@@ -30,11 +30,16 @@ const RETURN_FIELDS = Object.freeze([
   Object.freeze({key:'arrivedAt',header:'Дата прибуття'}),
   Object.freeze({key:'statusSource',header:'Джерело статусу'}),
   Object.freeze({key:'promId',header:'Prom ID'}),
-  Object.freeze({key:'note',header:'Примітка'})
+  Object.freeze({key:'note',header:'Примітка'}),
+  Object.freeze({key:'originalTtn',header:'Першочергова ТТН'}),
+  Object.freeze({key:'returnTtn',header:'ТТН повернення'}),
+  Object.freeze({key:'supplierNotified',header:'Постачальника сповіщено'}),
+  Object.freeze({key:'supplierNotifiedAt',header:'Дата/час сповіщення'})
 ]);
 
 const RETURN_HEADERS = Object.freeze(RETURN_FIELDS.map(item=>item.header));
 const RETURN_KEYS = Object.freeze(RETURN_FIELDS.map(item=>item.key));
+const PREVIOUS_RETURN_HEADERS = Object.freeze(RETURN_HEADERS.slice(0,RETURN_HEADERS.length-4));
 const SUPPLIER_HEADERS = Object.freeze(['ID','Назва','Активний','Створено','Оновлено']);
 const SETTINGS_HEADERS = Object.freeze(['Тип','ID','Назва','Активний','Порядок']);
 const LEGACY_RETURN_HEADERS = Object.freeze(['SalesDrive ID','№ замовлення','Дата','Магазин','Клієнт','Телефон','Товар','Артикул','Сума','Перевізник','ТТН','Статус доставки','Код статусу','Повернення','Дата початку повернення','Дата прибуття','Постачальник','№ замовлення постачальника','Забрано постачальником','Дата закриття','Оновлено','Джерело статусу','Prom ID','Примітка']);
@@ -53,7 +58,9 @@ function ensureDatabase_(){
   if(!existingJoined){
     sh.getRange(1,1,1,RETURN_HEADERS.length).setValues([RETURN_HEADERS]);
   }else if(existing.slice(0,RETURN_HEADERS.length).join('|')!==RETURN_HEADERS.join('|')){
-    if(existing.slice(0,LEGACY_RETURN_HEADERS.length).join('|')===LEGACY_RETURN_HEADERS.join('|')){
+    if(existing.slice(0,PREVIOUS_RETURN_HEADERS.length).join('|')===PREVIOUS_RETURN_HEADERS.join('|')){
+      upgradeReturnHeadersV2_(sh);
+    }else if(existing.slice(0,LEGACY_RETURN_HEADERS.length).join('|')===LEGACY_RETURN_HEADERS.join('|')){
       migrateLegacyReturns_(sh);
     }else{
       throw new Error('Аркуш «'+RETURN_MONITOR.returnsSheet+'» має невідому структуру колонок. Автоматичну міграцію зупинено, щоб не пошкодити дані.');
@@ -67,6 +74,27 @@ function ensureDatabase_(){
   return sh;
 }
 
+function upgradeReturnHeadersV2_(sh){
+  const start=PREVIOUS_RETURN_HEADERS.length+1;
+  const added=RETURN_HEADERS.slice(PREVIOUS_RETURN_HEADERS.length);
+  sh.getRange(1,start,1,added.length).setValues([added]);
+  const last=sh.getLastRow();
+  if(last<2) return;
+
+  const ttnCol=PREVIOUS_RETURN_HEADERS.indexOf('ТТН')+1;
+  const statusCol=PREVIOUS_RETURN_HEADERS.indexOf('Статус доставки')+1;
+  const returnNumberCol=PREVIOUS_RETURN_HEADERS.indexOf('№ повернення')+1;
+  const ttns=sh.getRange(2,ttnCol,last-1,1).getDisplayValues();
+  const statuses=sh.getRange(2,statusCol,last-1,1).getDisplayValues();
+  const numbers=sh.getRange(2,returnNumberCol,last-1,1).getDisplayValues();
+  const values=ttns.map((r,i)=>{
+    const ttn=String(r[0]||'').trim();
+    const isReturn=Boolean(String(numbers[i][0]||'').trim())||looksLikeReturn_(statuses[i][0]);
+    return [ttn,isReturn?ttn:'',false,''];
+  });
+  sh.getRange(2,start,values.length,added.length).setValues(values);
+}
+
 function migrateLegacyReturns_(sh){
   const last=sh.getLastRow();
   const legacyRows=last>1?sh.getRange(2,1,last-1,LEGACY_RETURN_HEADERS.length).getValues():[];
@@ -78,7 +106,8 @@ function migrateLegacyReturns_(sh){
     const supplierPickedUp=toBool_(r[18]);
     const arrivedAt=dateIso_(r[15]);
     const returnStartedAt=dateIso_(r[14]);
-    const id=String(r[0]||'')&&String(r[10]||'')?('sd_'+String(r[0])+'_'+String(r[10])):Utilities.getUuid();
+    const ttn=String(r[10]||'');
+    const id=String(r[0]||'')&&ttn?('sd_'+String(r[0])+'_'+ttn):Utilities.getUuid();
     const obj={
       id:id,
       returnNumber:isReturn?legacyReturnNumber_(now,seq++):'',
@@ -104,14 +133,18 @@ function migrateLegacyReturns_(sh){
       orderDate:dateIso_(r[2]),
       shop:String(r[3]||''),
       carrier:String(r[9]||''),
-      ttn:String(r[10]||''),
+      ttn:ttn,
       deliveryStatus:deliveryStatus,
       deliveryCode:String(r[12]||''),
       returnStartedAt:returnStartedAt,
       arrivedAt:arrivedAt,
       statusSource:String(r[21]||''),
       promId:String(r[22]||''),
-      note:String(r[23]||'')
+      note:String(r[23]||''),
+      originalTtn:ttn,
+      returnTtn:isReturn?ttn:'',
+      supplierNotified:false,
+      supplierNotifiedAt:''
     };
     return objectToRow_(obj);
   });
