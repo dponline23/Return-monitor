@@ -1,17 +1,21 @@
 function refreshTracking_(){
-  const rows=readReturnRows_().filter(r=>r.ttn&&!r.supplierPickedUp&&isReturnRecord_(r)).slice(0,80);
+  const rows=readReturnRows_().filter(r=>(r.returnTtn||r.ttn)&&!r.supplierPickedUp&&isReturnRecord_(r)).slice(0,80);
   let checked=0,updated=0,skipped=0,errors=0;
 
   rows.forEach(row=>{
     try{
-      const result=trackShipment_(row.carrier,row.ttn);
+      const trackingTtn=row.returnTtn||row.ttn;
+      const result=trackShipment_(row.carrier,trackingTtn);
       if(!result||result.skipped){ skipped++; return; }
+      result.ttn=trackingTtn;
+      result.originalTtn=row.originalTtn||row.ttn||'';
+      result.returnTtn=row.returnTtn||trackingTtn;
       checked++;
       updateTrackingRow_(row,result);
       updated++;
     }catch(error){
       errors++;
-      console.error('Tracking error',row.ttn,error);
+      console.error('Tracking error',row.returnTtn||row.ttn,error);
     }
   });
   return {ok:errors===0,checked:checked,updated:updated,skipped:skipped,errors:errors};
@@ -54,6 +58,7 @@ function trackTemplateProvider_(name,urlProperty,tokenProperty,ttn){
 
 function trackingResult_(source,status,statusCode,raw){
   const isReturn=looksLikeReturn_(status);
-  const arrived=/повернен.{0,30}(отрим|видан)|отримано.{0,30}відправник|повернул/i.test(status);
-  return {source:source,statusText:status,statusCode:statusCode,isReturn:isReturn,returnStartedAt:isReturn?new Date().toISOString():'',arrivedAt:arrived?new Date().toISOString():'',raw:raw||{}};
+  const arrived=looksLikeReturnArrived_(status);
+  const now=new Date().toISOString();
+  return {source:source,statusText:status,statusCode:statusCode,isReturn:isReturn,returnStartedAt:isReturn?now:'',arrivedAt:arrived?now:'',raw:raw||{}};
 }
