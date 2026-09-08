@@ -1,5 +1,5 @@
 function refreshTracking_(){
-  const rows=readReturnRows_().filter(r=>r.ttn&&!r.supplierPickedUp).slice(0,80);
+  const rows=readReturnRows_().filter(r=>r.ttn&&!r.supplierPickedUp&&isReturnRecord_(r)).slice(0,80);
   let checked=0,updated=0,skipped=0,errors=0;
 
   rows.forEach(row=>{
