@@ -12,7 +12,8 @@ function doGet() {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle(RETURN_MONITOR.name)
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport','width=device-width, initial-scale=1');
 }
 
 function include_(name) {
@@ -91,8 +92,11 @@ function apiSetupStatus() {
 
 function getSetupStatus_() {
   const p = PropertiesService.getScriptProperties();
+  const salesDriveState = typeof getSalesDriveState_ === 'function' ? getSalesDriveState_() : { configured:false, subdomain:'' };
   return {
-    salesDrive: Boolean(p.getProperty('SALESDRIVE_API_URL_TEMPLATE')),
+    salesDrive: Boolean(salesDriveState.configured),
+    salesDriveSubdomain: salesDriveState.subdomain || '',
+    salesDriveLastSync: salesDriveState.lastSync || '',
     novaPoshta: Boolean(p.getProperty('NOVA_POSHTA_API_KEY')),
     ukrposhta: Boolean(p.getProperty('UKRPOSHTA_TRACKING_URL_TEMPLATE')),
     meest: Boolean(p.getProperty('MEEST_TRACKING_URL_TEMPLATE')),
