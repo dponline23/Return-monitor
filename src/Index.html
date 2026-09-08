@@ -9,7 +9,7 @@
 <div class="app" id="app">
   <div class="top">
     <div><div class="title">Повернення — контроль</div><div class="sub" id="setupLine">Завантаження…</div></div>
-    <div class="actions"><button class="btn" onclick="loadData()">Оновити</button><button class="btn primary" onclick="syncNow()">Синхронізувати</button></div>
+    <div class="actions"><button class="btn" onclick="openSalesDriveSettings()">Налаштування</button><button class="btn" onclick="loadData()">Оновити</button><button class="btn primary" onclick="syncNow()">Синхронізувати</button></div>
   </div>
   <div class="error" id="error"></div>
   <div class="kpis" id="kpis"></div>
@@ -17,6 +17,18 @@
   <div class="toolbar"><input class="search" id="search" placeholder="Пошук: № замовлення, ТТН, постачальник, товар" oninput="renderRows()"></div>
   <div class="table" id="table"></div>
 </div>
+
+<dialog id="salesDriveDialog" class="dialog">
+  <form onsubmit="saveSalesDriveSettings(event)">
+    <div class="dialogHead"><div><div class="dialogEyebrow">SalesDrive · API</div><h2>Підключення замовлень</h2></div><button class="iconBtn" type="button" onclick="closeSalesDriveSettings()">×</button></div>
+    <p class="dialogText">Використовується API бази заявок. Ключ зберігається у Script Properties цього Apps Script і не записується в Google Sheet або GitHub.</p>
+    <label class="field"><span>Субдомен</span><input id="salesDriveSubdomain" autocomplete="off" placeholder="techwolves"></label>
+    <label class="field"><span>API-ключ заявок</span><input id="salesDriveApiKey" type="password" autocomplete="new-password" placeholder="Залиште порожнім, щоб не змінювати"></label>
+    <div class="dialogStatus" id="salesDriveStatus">Не налаштовано</div>
+    <div class="dialogActions"><button class="btn" type="button" onclick="testSalesDrive()">Перевірити</button><button class="btn primary" type="submit">Зберегти</button></div>
+  </form>
+</dialog>
+
 <script>
 let model={rows:[],counts:{returning:0,arrived:0,waiting:0,closed:0}},active:'returning';
 const labels={returning:'Повертаються',arrived:'Приїхали',waiting:'Очікують постачальника',closed:'Закриті'};
@@ -66,11 +78,47 @@ function rowHtml(r){
 }
 function saveSupplier(row){call('apiUpdateSupplier',{rowNumber:row,supplier:document.getElementById('s'+row).value,supplierOrder:document.getElementById('o'+row).value},data=>{model=data;render();});}
 function markTaken(row,taken){call('apiMarkTaken',{rowNumber:row,taken:taken},data=>{model=data;render();});}
+
+function openSalesDriveSettings(){
+  call('apiSalesDriveSettings',undefined,state=>{
+    document.getElementById('salesDriveSubdomain').value=state.subdomain||'techwolves';
+    document.getElementById('salesDriveApiKey').value='';
+    renderSalesDriveSettingsState(state);
+    document.getElementById('salesDriveDialog').showModal();
+  });
+}
+function closeSalesDriveSettings(){document.getElementById('salesDriveDialog').close();}
+function renderSalesDriveSettingsState(state){
+  const parts=[state.configured?'API-ключ збережено':'API-ключ не збережено'];
+  if(state.lastSync) parts.push('остання синхронізація '+fmtDateTime(state.lastSync));
+  document.getElementById('salesDriveStatus').textContent=parts.join(' · ');
+}
+function saveSalesDriveSettings(event){
+  event.preventDefault();
+  const payload={subdomain:document.getElementById('salesDriveSubdomain').value,apiKey:document.getElementById('salesDriveApiKey').value};
+  call('apiSaveSalesDriveSettings',payload,state=>{
+    renderSalesDriveSettingsState(state);
+    document.getElementById('salesDriveApiKey').value='';
+    loadData();
+  });
+}
+function testSalesDrive(){
+  const key=document.getElementById('salesDriveApiKey').value.trim();
+  const subdomain=document.getElementById('salesDriveSubdomain').value.trim();
+  const afterSave=()=>call('apiTestSalesDrive',undefined,result=>{
+    renderSalesDriveSettingsState(result.state||{});
+    document.getElementById('salesDriveStatus').textContent='Підключення працює'+(result.sampleExternalId?' · приклад №'+result.sampleExternalId:'');
+  });
+  if(key){call('apiSaveSalesDriveSettings',{subdomain:subdomain,apiKey:key},()=>{document.getElementById('salesDriveApiKey').value='';afterSave();});}
+  else afterSave();
+}
+
 function showError(t){const el=document.getElementById('error');el.textContent=t;el.style.display='block';}
 function hideError(){document.getElementById('error').style.display='none';}
 function esc(v){return String(v||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function attr(v){return esc(v).replace(/`/g,'&#96;');}
 function fmtDate(v){if(!v)return'';const d=new Date(v);return isNaN(d)?'':d.toLocaleDateString('uk-UA');}
+function fmtDateTime(v){if(!v)return'';const d=new Date(v);return isNaN(d)?'':d.toLocaleString('uk-UA');}
 loadData();
 </script>
 </body>
