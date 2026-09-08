@@ -91,11 +91,11 @@ function migrateLegacyReturns_(sh){
       returnReason:'',
       returnReasonComment:'',
       amount:Number(r[8]||0),
-      returnStatus:supplierPickedUp?'completed':(arrivedAt?'arrived':(isReturn?'in_transit':'')),
-      supplierPickupStatus:supplierPickedUp?'picked_up':(arrivedAt?'waiting_pickup':'not_handed_over'),
+      returnStatus:supplierPickedUp?'completed':(isReturn?(arrivedAt?'arrived':'in_transit'):''),
+      supplierPickupStatus:supplierPickedUp?'picked_up':(isReturn&&arrivedAt?'waiting_pickup':'not_handed_over'),
       supplierPickedUp:supplierPickedUp,
       supplierPickedUpAt:dateIso_(r[19]),
-      returnDate:arrivedAt||returnStartedAt||'',
+      returnDate:isReturn?(arrivedAt||returnStartedAt||''):'',
       source:String(r[0]||'')?'salesdrive':'manual',
       createdAt:dateIso_(r[2])||now.toISOString(),
       updatedAt:dateIso_(r[20])||now.toISOString(),
@@ -141,7 +141,10 @@ function ensureSettingsSheet_(){
   let sh=ss.getSheetByName(RETURN_MONITOR.settingsSheet);
   if(!sh) sh=ss.insertSheet(RETURN_MONITOR.settingsSheet);
   const current=sh.getRange(1,1,1,SETTINGS_HEADERS.length).getDisplayValues()[0];
-  if(current.join('|')!==SETTINGS_HEADERS.join('|')) sh.getRange(1,1,1,SETTINGS_HEADERS.length).setValues([SETTINGS_HEADERS]);
+  const legacySettings=['Ключ','Значення','Опис','Секрет'];
+  if(current.slice(0,legacySettings.length).join('|')===legacySettings.join('|')) sh.clearContents();
+  const refreshed=sh.getRange(1,1,1,SETTINGS_HEADERS.length).getDisplayValues()[0];
+  if(refreshed.join('|')!==SETTINGS_HEADERS.join('|')) sh.getRange(1,1,1,SETTINGS_HEADERS.length).setValues([SETTINGS_HEADERS]);
   sh.setFrozenRows(1);
   seedDefaultReturnReasons_(sh);
   return sh;
