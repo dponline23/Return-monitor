@@ -32,5 +32,5 @@ function buildDashboard_(){
 }
 
 function looksLikeReturn_(status){
-  return /повер|відмов|не забра|відправник/i.test(String(status||''));
+  return /повер|відмов|не забра|відправник|переадрес/i.test(String(status||''));
 }
