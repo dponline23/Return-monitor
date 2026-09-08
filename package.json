@@ -1,0 +1,13 @@
+{
+  "name": "return-monitor",
+  "private": true,
+  "scripts": {
+    "clasp:config": "node scripts/write-clasp.cjs",
+    "pull": "npm run clasp:config && clasp pull",
+    "push": "npm run clasp:config && clasp push --force",
+    "deploy": "npm run clasp:config && node scripts/deploy.cjs"
+  },
+  "devDependencies": {
+    "@google/clasp": "3.4.1"
+  }
+}
