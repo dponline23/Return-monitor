@@ -34,3 +34,9 @@ function buildDashboard_(){
 function looksLikeReturn_(status){
   return /повер|відмов|не забра|відправник|переадрес/i.test(String(status||''));
 }
+
+function looksLikeReturnArrived_(status){
+  const text=String(status||'').toLowerCase();
+  if(!text) return false;
+  return /повернен.{0,45}(отрим|видан)|отриман.{0,45}(відправник|повернен)|видан.{0,45}(відправник|повернен)|повернул.{0,45}(відправник|одержувач)|отримано відправником|вручено відправнику/.test(text);
+}
