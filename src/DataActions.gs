@@ -49,17 +49,23 @@ function upsertSalesDriveOrders_(orders){
       arrivedAt:arrivedAt,
       statusSource:String(order.statusSource||'SalesDrive'),
       promId:String(order.promId||''),
-      note:String(order.note||((old&&old.note)||''))
+      note:String(order.note||((old&&old.note)||'')),
+      originalTtn:(old&&old.originalTtn)||String(order.originalTtn||ttn),
+      returnTtn:(old&&old.returnTtn)||String(order.returnTtn||''),
+      supplierNotified:Boolean(old&&old.supplierNotified),
+      supplierNotifiedAt:(old&&old.supplierNotifiedAt)||''
     };
 
     if(detectedReturn&&!base.returnNumber) base.returnNumber=generateReturnNumber_();
+    if(detectedReturn&&!base.returnTtn) base.returnTtn=ttn;
     if(base.supplierPickedUp){
       base.supplierPickupStatus='picked_up';
     }else if(arrivedAt){
-      base.returnStatus=base.returnStatus||'arrived';
+      base.returnStatus='arrived';
       base.supplierPickupStatus='waiting_pickup';
-    }else if(detectedReturn&&!base.returnStatus){
-      base.returnStatus='in_transit';
+    }else if(detectedReturn){
+      base.returnStatus=base.returnStatus==='arrived'?'in_transit':(base.returnStatus||'in_transit');
+      if(base.supplierPickupStatus==='waiting_pickup') base.supplierPickupStatus='not_handed_over';
     }
 
     const normalized=normalizeReturnState_(base,false);
@@ -78,96 +84,158 @@ function upsertSalesDriveOrders_(orders){
 }
 
 function updateTrackingRow_(row,tracking){
-  const sh=ensureDatabase_();
+  const sh=returnSheetFast_();
   const raw=sh.getRange(row.rowNumber,1,1,RETURN_HEADERS.length).getValues()[0];
   const current=rowToObject_(raw,row.rowNumber);
   const isReturn=Boolean(tracking.isReturn)||looksLikeReturn_(tracking.statusText);
-  const arrivedAt=current.arrivedAt||tracking.arrivedAt||'';
+  const arrivedAt=tracking.arrivedAt||'';
   const merged=Object.assign({},current,{
     deliveryStatus:tracking.statusText||current.deliveryStatus,
     deliveryCode:tracking.statusCode||current.deliveryCode,
     statusSource:tracking.source||current.statusSource,
     returnStartedAt:current.returnStartedAt||tracking.returnStartedAt||'',
     arrivedAt:arrivedAt,
+    originalTtn:current.originalTtn||tracking.originalTtn||current.ttn||'',
+    returnTtn:current.returnTtn||tracking.returnTtn||(isReturn?(tracking.ttn||current.ttn||''):''),
     updatedAt:new Date().toISOString()
   });
   if(isReturn&&!merged.returnNumber) merged.returnNumber=generateReturnNumber_();
-  if(isReturn&&!merged.returnStatus) merged.returnStatus='in_transit';
   if(arrivedAt&&!merged.supplierPickedUp){
     merged.returnStatus='arrived';
     merged.supplierPickupStatus='waiting_pickup';
     merged.returnDate=merged.returnDate||arrivedAt;
+  }else if(isReturn&&!merged.supplierPickedUp){
+    merged.returnStatus='in_transit';
+    if(merged.supplierPickupStatus==='waiting_pickup') merged.supplierPickupStatus='not_handed_over';
   }
   sh.getRange(row.rowNumber,1,1,RETURN_HEADERS.length).setValues([objectToRow_(normalizeReturnState_(merged,false))]);
 }
 
 function saveReturn_(payload,isCreate){
   payload=payload||{};
-  const sh=ensureDatabase_();
-  const supplier=supplierById_(payload.supplierId);
-  if(!supplier) throw new Error('Оберіть постачальника зі списку.');
+  const createLock=isCreate?LockService.getUserLock():null;
+  if(createLock) createLock.waitLock(15000);
+  try{
+    const sh=ensureDatabase_();
+    const supplier=supplierById_(payload.supplierId);
+    if(!supplier) throw new Error('Оберіть постачальника зі списку.');
 
-  const reason=String(payload.returnReason||'').trim();
-  if(reason&&reason!=='other'&&!returnReasonById_(reason)) throw new Error('Невідома причина повернення.');
-  const status=String(payload.returnStatus||'expected').trim();
-  if(!RETURN_STATUS_CONFIG[status]) throw new Error('Невідомий статус повернення.');
+    const reason=String(payload.returnReason||'').trim();
+    if(reason&&reason!=='other'&&!returnReasonById_(reason)) throw new Error('Невідома причина повернення.');
+    const status=String(payload.returnStatus||'expected').trim();
+    if(!RETURN_STATUS_CONFIG[status]) throw new Error('Невідомий статус повернення.');
 
-  let current={};
-  let rowNumber=0;
-  if(!isCreate){
-    current=findReturnById_(payload.id);
-    if(!current) throw new Error('Повернення не знайдено.');
-    rowNumber=current.rowNumber;
+    let current={};
+    let rowNumber=0;
+    if(!isCreate){
+      current=findReturnById_(payload.id);
+      if(!current) throw new Error('Повернення не знайдено.');
+      rowNumber=current.rowNumber;
+    }
+
+    const now=new Date();
+    const cleanUrl=safeHttpUrl_(payload.supplierOrderUrl);
+    const cleanAmount=payload.amount===''||payload.amount===null||payload.amount===undefined?0:Number(payload.amount);
+    if(!Number.isFinite(cleanAmount)||cleanAmount<0) throw new Error('Сума повернення має бути числом 0 або більше.');
+
+    const originalTtn=String(payload.originalTtn||current.originalTtn||current.ttn||'').trim();
+    const returnTtn=String(payload.returnTtn||current.returnTtn||'').trim();
+    const duplicateKey=isCreate?manualDuplicateKey_({supplierId:supplier.id,supplierOrderNumber:payload.supplierOrderNumber,productName:payload.productName,amount:cleanAmount,originalTtn:originalTtn,returnTtn:returnTtn}):'';
+    if(isCreate&&duplicateKey){
+      const cached=CacheService.getUserCache().get(duplicateKey);
+      if(cached) return cached;
+    }
+
+    const next=Object.assign({},current,{
+      id:isCreate?Utilities.getUuid():current.id,
+      returnNumber:isCreate?generateReturnNumber_():(current.returnNumber||generateReturnNumber_()),
+      supplierId:supplier.id,
+      supplierName:supplier.name,
+      supplierOrderNumber:String(payload.supplierOrderNumber||'').trim(),
+      supplierOrderUrl:cleanUrl,
+      productName:String(payload.productName||'').trim(),
+      productImage:String(payload.productImage||current.productImage||'').trim(),
+      returnReason:reason,
+      returnReasonComment:reason==='other'?String(payload.returnReasonComment||'').trim():'',
+      amount:cleanAmount,
+      returnStatus:status,
+      returnDate:dateIso_(payload.returnDate)||current.returnDate||'',
+      source:isCreate?'manual':(current.source||'manual'),
+      createdAt:isCreate?now.toISOString():(current.createdAt||now.toISOString()),
+      updatedAt:now.toISOString(),
+      note:String(payload.note||'').trim(),
+      originalTtn:originalTtn,
+      returnTtn:returnTtn,
+      supplierNotified:Boolean(current.supplierNotified),
+      supplierNotifiedAt:current.supplierNotifiedAt||''
+    });
+
+    if(payload.productImageData) next.productImage=saveReturnImage_(payload.productImageData,next.id);
+    if(!next.supplierPickedUp) next.supplierPickupStatus=status==='arrived'?'waiting_pickup':'not_handed_over';
+    const normalized=normalizeReturnState_(next,true);
+    if(isCreate){
+      sh.appendRow(objectToRow_(normalized));
+      if(duplicateKey) CacheService.getUserCache().put(duplicateKey,normalized.id,120);
+    }else{
+      sh.getRange(rowNumber,1,1,RETURN_HEADERS.length).setValues([objectToRow_(normalized)]);
+    }
+    return normalized.id;
+  }finally{
+    if(createLock) createLock.releaseLock();
   }
-
-  const now=new Date();
-  const cleanUrl=safeHttpUrl_(payload.supplierOrderUrl);
-  const cleanAmount=payload.amount===''||payload.amount===null||payload.amount===undefined?0:Number(payload.amount);
-  if(!Number.isFinite(cleanAmount)||cleanAmount<0) throw new Error('Сума повернення має бути числом 0 або більше.');
-
-  const next=Object.assign({},current,{
-    id:isCreate?Utilities.getUuid():current.id,
-    returnNumber:isCreate?generateReturnNumber_():(current.returnNumber||generateReturnNumber_()),
-    supplierId:supplier.id,
-    supplierName:supplier.name,
-    supplierOrderNumber:String(payload.supplierOrderNumber||'').trim(),
-    supplierOrderUrl:cleanUrl,
-    productName:String(payload.productName||'').trim(),
-    productImage:String(payload.productImage||current.productImage||'').trim(),
-    returnReason:reason,
-    returnReasonComment:reason==='other'?String(payload.returnReasonComment||'').trim():'',
-    amount:cleanAmount,
-    returnStatus:status,
-    returnDate:dateIso_(payload.returnDate)||current.returnDate||'',
-    source:isCreate?'manual':(current.source||'manual'),
-    createdAt:isCreate?now.toISOString():(current.createdAt||now.toISOString()),
-    updatedAt:now.toISOString(),
-    note:String(payload.note||'').trim()
-  });
-
-  if(payload.productImageData){ next.productImage=saveReturnImage_(payload.productImageData,next.id); }
-  if(!next.supplierPickedUp){
-    next.supplierPickupStatus=status==='arrived'?'waiting_pickup':'not_handed_over';
-  }
-  const normalized=normalizeReturnState_(next,true);
-  if(isCreate){
-    sh.appendRow(objectToRow_(normalized));
-  }else{
-    sh.getRange(rowNumber,1,1,RETURN_HEADERS.length).setValues([objectToRow_(normalized)]);
-  }
-  return normalized.id;
 }
 
 function markSupplierPickedUp_(id,taken){
-  const sh=ensureDatabase_();
-  const row=findReturnById_(id);
+  const row=findReturnByIdFast_(id);
   if(!row) throw new Error('Повернення не знайдено.');
   const now=new Date();
   row.supplierPickedUp=Boolean(taken);
   row.supplierPickedUpAt=taken?now.toISOString():'';
   row.supplierPickupStatus=taken?'picked_up':(row.returnStatus==='arrived'?'waiting_pickup':'not_handed_over');
   row.updatedAt=now.toISOString();
+  return writeReturnFast_(row);
+}
+
+function markSupplierNotified_(id,notified){
+  const row=findReturnByIdFast_(id);
+  if(!row) throw new Error('Повернення не знайдено.');
+  const now=new Date();
+  row.supplierNotified=Boolean(notified);
+  row.supplierNotifiedAt=notified?now.toISOString():'';
+  row.updatedAt=now.toISOString();
+  return writeReturnFast_(row);
+}
+
+function returnSheetFast_(){
+  const sh=db_().getSheetByName(RETURN_MONITOR.returnsSheet);
+  if(!sh) throw new Error('Аркуш повернень не знайдено.');
+  return sh;
+}
+
+function findReturnByIdFast_(id){
+  const target=String(id||'').trim();
+  if(!target) return null;
+  const sh=returnSheetFast_();
+  const last=sh.getLastRow();
+  if(last<2) return null;
+  const finder=sh.getRange(2,1,last-1,1).createTextFinder(target).matchEntireCell(true).findNext();
+  if(!finder) return null;
+  const rowNumber=finder.getRow();
+  return rowToObject_(sh.getRange(rowNumber,1,1,RETURN_HEADERS.length).getValues()[0],rowNumber);
+}
+
+function writeReturnFast_(row){
+  const sh=returnSheetFast_();
   sh.getRange(row.rowNumber,1,1,RETURN_HEADERS.length).setValues([objectToRow_(row)]);
+  return rowToObject_(objectToRow_(row),row.rowNumber);
+}
+
+function manualDuplicateKey_(data){
+  const raw=['RETURN_CREATE',data.supplierId||'',data.supplierOrderNumber||'',data.productName||'',Number(data.amount||0),data.originalTtn||'',data.returnTtn||'']
+    .map(value=>String(value).trim().toLowerCase()).join('|');
+  if(!raw.replace(/\|/g,'')) return '';
+  const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,raw,Utilities.Charset.UTF_8);
+  return 'RM_DUP_'+Utilities.base64EncodeWebSafe(digest).replace(/=+$/,'').slice(0,40);
 }
 
 function generateReturnNumber_(){
