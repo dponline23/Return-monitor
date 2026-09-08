@@ -20,83 +20,14 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
-
+          import re, base64
           p = Path('src/Styles.html')
           s = p.read_text(encoding='utf-8')
-          block = r'''
-<style>
-/* Compact sizing to match approved mobile return-detail reference */
-@media(max-width:760px){
-  .detailsDrawer.refDetails{font-size:12px}
-  .detailsDrawer.refDetails .drawerHead{grid-template-columns:34px minmax(0,1fr) 34px;gap:8px;padding:8px 10px}
-  .refBack,.refMore{width:34px;height:34px;border-radius:10px}
-  .refBack svg,.refMore svg{width:18px!important;height:18px!important}
-  .refHeadTitle strong{font-size:15px;line-height:1.12}
-  .refHeadTitle span{font-size:10px;margin-top:2px}
-
-  .detailsDrawer.refDetails .drawerBody{padding:7px}
-  .refCard{padding:9px;border-radius:13px;margin-bottom:8px;box-shadow:0 3px 10px rgba(16,24,40,.04)}
-  .refCardHead{margin-bottom:6px}
-  .refCardTitle{gap:7px}
-  .refCardTitle strong{font-size:12px;line-height:1.2}
-  .refSectionIcon{width:28px;height:28px;border-radius:9px}
-  .refSectionIcon svg{width:14px!important;height:14px!important}
-  .refEditBtn{height:28px;padding:0 8px;border-radius:8px;font-size:10px;gap:5px}
-  .refEditBtn svg{width:13px!important;height:13px!important}
-
-  .refSummary{grid-template-columns:minmax(0,1.2fr) 1px minmax(0,.9fr);gap:9px}
-  .refSummaryLeft{gap:8px}
-  .refSummaryIcon{width:36px;height:36px;border-radius:11px}
-  .refSummaryIcon svg{width:18px!important;height:18px!important}
-  .refSummaryRight strong{font-size:15px;line-height:1.05}
-  .refCaption{font-size:9.5px;margin-top:2px}
-  .refDetails .badge{font-size:9.5px;padding:4px 7px}
-
-  .refRows .refRow{grid-template-columns:14px 104px minmax(0,1fr) auto;gap:6px;min-height:29px}
-  .refRowIcon svg{width:13px!important;height:13px!important}
-  .refRowLabel{font-size:10px;line-height:1.2}
-  .refRowValue{font-size:11px;line-height:1.28;font-weight:650}
-  .refRowValue .orderLink{font-size:11px}
-  .refRowAction .refIconBtn{width:25px;height:25px;border-radius:7px}
-  .refRowAction .refIconBtn svg{width:12px!important;height:12px!important}
-
-  .refProductInner{gap:9px;padding:8px;border-radius:11px}
-  .refProductInner img,.refProductPlaceholder{width:54px;height:54px;border-radius:10px}
-  .refProductInner strong{font-size:11px;line-height:1.3}
-
-  .refSupplierActions{grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}
-  .refCopyAll,.refNotifyBtn{min-height:32px!important;padding:6px 8px!important;border-radius:9px;font-size:10.5px!important;line-height:1.15;display:flex;align-items:center;justify-content:center;gap:5px}
-  .refCopyAll svg,.refNotifyBtn svg{width:14px!important;height:14px!important;min-width:14px;max-width:14px;flex:0 0 14px}
-  .refNotifyState{min-height:32px;padding:5px 8px;border-radius:9px;gap:6px}
-  .refNotifyState svg{width:14px!important;height:14px!important;flex:0 0 14px}
-  .refNotifyState strong{font-size:10px;line-height:1.15}
-  .refNotifyState span{font-size:8.5px;margin-top:1px}
-  .refCancel{min-height:29px!important;margin-top:6px;padding:5px 8px!important;border-radius:8px;font-size:9.5px!important;line-height:1.15;display:flex;align-items:center;justify-content:center;gap:5px}
-  .refCancel svg{width:13px!important;height:13px!important;flex:0 0 13px}
-
-  .refPickupBox{grid-template-columns:32px minmax(0,1fr);gap:8px;padding:8px 9px;border-radius:11px}
-  .refPickupIcon{width:30px;height:30px}
-  .refPickupIcon svg{width:16px!important;height:16px!important}
-  .refPickupBox strong{font-size:11px;line-height:1.2;margin-bottom:2px}
-  .refPickupBox span{font-size:9.5px;line-height:1.3}
-  .refPickupBox .pickupAction{min-height:31px;margin-top:2px;padding:5px 8px;font-size:10px;border-radius:8px}
-
-  .refBackList{min-height:31px!important;padding:5px 9px!important;border-radius:9px;font-size:10px!important;display:flex;align-items:center;justify-content:center;gap:5px}
-  .refBackList svg{width:13px!important;height:13px!important;flex:0 0 13px}
-}
-@media(max-width:390px){
-  .refRows .refRow{grid-template-columns:14px 96px minmax(0,1fr) auto}
-  .refSupplierActions{grid-template-columns:1fr 1fr}
-  .refCard{padding:8px}
-  .refProductInner img,.refProductPlaceholder{width:50px;height:50px}
-}
-</style>
-'''
+          block = base64.b64decode('PHN0eWxlPgovKiBDb21wYWN0IHNpemluZyB0byBtYXRjaCBhcHByb3ZlZCBtb2JpbGUgcmV0dXJuLWRldGFpbCByZWZlcmVuY2UgKi8KQG1lZGlhKG1heC13aWR0aDo3NjBweCl7CiAgLmRldGFpbHNEcmF3ZXIucmVmRGV0YWlsc3tmb250LXNpemU6MTJweH0KICAuZGV0YWlsc0RyYXdlci5yZWZEZXRhaWxzIC5kcmF3ZXJIZWFke2dyaWQtdGVtcGxhdGUtY29sdW1uczozNHB4IG1pbm1heCgwLDFmcikgMzRweDtnYXA6OHB4O3BhZGRpbmc6OHB4IDEwcHh9CiAgLnJlZkJhY2ssLnJlZk1vcmV7d2lkdGg6MzRweDtoZWlnaHQ6MzRweDtib3JkZXItcmFkaXVzOjEwcHh9CiAgLnJlZkJhY2sgc3ZnLC5yZWZNb3JlIHN2Z3t3aWR0aDoxOHB4IWltcG9ydGFudDtoZWlnaHQ6MThweCFpbXBvcnRhbnR9CiAgLnJlZkhlYWRUaXRsZSBzdHJvbmd7Zm9udC1zaXplOjE1cHg7bGluZS1oZWlnaHQ6MS4xMn0KICAucmVmSGVhZFRpdGxlIHNwYW57Zm9udC1zaXplOjEwcHg7bWFyZ2luLXRvcDoycHh9CgogIC5kZXRhaWxzRHJhd2VyLnJlZkRldGFpbHMgLmRyYXdlckJvZHl7cGFkZGluZzo3cHh9CiAgLnJlZkNhcmR7cGFkZGluZzo5cHg7Ym9yZGVyLXJhZGl1czoxM3B4O21hcmdpbi1ib3R0b206OHB4O2JveC1zaGFkb3c6MCAzcHggMTBweCByZ2JhKDE2LDI0LDQwLC4wNCl9CiAgLnJlZkNhcmRIZWFke21hcmdpbi1ib3R0b206NnB4fQogIC5yZWZDYXJkVGl0bGV7Z2FwOjdweH0KICAucmVmQ2FyZFRpdGxlIHN0cm9uZ3tmb250LXNpemU6MTJweDtsaW5lLWhlaWdodDoxLjJ9CiAgLnJlZlNlY3Rpb25JY29ue3dpZHRoOjI4cHg7aGVpZ2h0OjI4cHg7Ym9yZGVyLXJhZGl1czo5cHh9CiAgLnJlZlNlY3Rpb25JY29uIHN2Z3t3aWR0aDoxNHB4IWltcG9ydGFudDtoZWlnaHQ6MTRweCFpbXBvcnRhbnR9CiAgLnJlZkVkaXRCdG57aGVpZ2h0OjI4cHg7cGFkZGluZzowIDhweDtib3JkZXItcmFkaXVzOjhweDtmb250LXNpemU6MTBweDtnYXA6NXB4fQogIC5yZWZFZGl0QnRuIHN2Z3t3aWR0aDoxM3B4IWltcG9ydGFudDtoZWlnaHQ6MTNweCFpbXBvcnRhbnR9CgogIC5yZWZTdW1tYXJ5e2dyaWQtdGVtcGxhdGUtY29sdW1uczptaW5tYXgoMCwxLjJmcikgMXB4IG1pbm1heCgwLC45ZnIpO2dhcDo5cHh9CiAgLnJlZlN1bW1hcnlMZWZ0e2dhcDo4cHh9CiAgLnJlZlN1bW1hcnlJY29ue3dpZHRoOjM2cHg7aGVpZ2h0OjM2cHg7Ym9yZGVyLXJhZGl1czoxMXB4fQogIC5yZWZTdW1tYXJ5SWNvbiBzdmd7d2lkdGg6MThweCFpbXBvcnRhbnQ7aGVpZ2h0OjE4cHghaW1wb3J0YW50fQogIC5yZWZTdW1tYXJ5UmlnaHQgc3Ryb25ne2ZvbnQtc2l6ZToxNXB4O2xpbmUtaGVpZ2h0OjEuMDV9CiAgLnJlZkNhcHRpb257Zm9udC1zaXplOjkuNXB4O21hcmdpbi10b3A6MnB4fQogIC5yZWZEZXRhaWxzIC5iYWRnZXtmb250LXNpemU6OS41cHg7cGFkZGluZzo0cHggN3B4fQoKICAucmVmUm93cyAucmVmUm93e2dyaWQtdGVtcGxhdGUtY29sdW1uczoxNHB4IDEwNHB4IG1pbm1heCgwLDFmcikgYXV0bztnYXA6NnB4O21pbi1oZWlnaHQ6MjlweH0KICAucmVmUm93SWNvbiBzdmd7d2lkdGg6MTNweCFpbXBvcnRhbnQ7aGVpZ2h0OjEzcHghaW1wb3J0YW50fQogIC5yZWZSb3dMYWJlbHtmb250LXNpemU6MTBweDtsaW5lLWhlaWdodDoxLjJ9CiAgLnJlZlJvd1ZhbHVle2ZvbnQtc2l6ZToxMXB4O2xpbmUtaGVpZ2h0OjEuMjg7Zm9udC13ZWlnaHQ6NjUwfQogIC5yZWZSb3dWYWx1ZSAub3JkZXJMaW5re2ZvbnQtc2l6ZToxMXB4fQogIC5yZWZSb3dBY3Rpb24gLnJlZkljb25CdG57d2lkdGg6MjVweDtoZWlnaHQ6MjVweDtib3JkZXItcmFkaXVzOjdweH0KICAucmVmUm93QWN0aW9uIC5yZWZJY29uQnRuIHN2Z3t3aWR0aDoxMnB4IWltcG9ydGFudDtoZWlnaHQ6MTJweCFpbXBvcnRhbnR9CgogIC5yZWZQcm9kdWN0SW5uZXJ7Z2FwOjlweDtwYWRkaW5nOjhweDtib3JkZXItcmFkaXVzOjExcHh9CiAgLnJlZlByb2R1Y3RJbm5lciBpbWcsLnJlZlByb2R1Y3RQbGFjZWhvbGRlcnt3aWR0aDo1NHB4O2hlaWdodDo1NHB4O2JvcmRlci1yYWRpdXM6MTBweH0KICAucmVmUHJvZHVjdElubmVyIHN0cm9uZ3tmb250LXNpemU6MTFweDtsaW5lLWhlaWdodDoxLjN9CgogIC5yZWZTdXBwbGllckFjdGlvbnN7Z3JpZC10ZW1wbGF0ZS1jb2x1bW5zOjFmciAxZnI7Z2FwOjdweDttYXJnaW4tdG9wOjhweH0KICAucmVmQ29weUFsbCwucmVmTm90aWZ5QnRue21pbi1oZWlnaHQ6MzJweCFpbXBvcnRhbnQ7cGFkZGluZzo2cHggOHB4IWltcG9ydGFudDtib3JkZXItcmFkaXVzOjlweDtmb250LXNpemU6MTAuNXB4IWltcG9ydGFudDtsaW5lLWhlaWdodDoxLjE1O2Rpc3BsYXk6ZmxleDthbGlnbi1pdGVtczpjZW50ZXI7anVzdGlmeS1jb250ZW50OmNlbnRlcjtnYXA6NXB4fQogIC5yZWZDb3B5QWxsIHN2ZywucmVmTm90aWZ5QnRuIHN2Z3t3aWR0aDoxNHB4IWltcG9ydGFudDtoZWlnaHQ6MTRweCFpbXBvcnRhbnQ7bWluLXdpZHRoOjE0cHg7bWF4LXdpZHRoOjE0cHg7ZmxleDowIDAgMTRweH0KICAucmVmTm90aWZ5U3RhdGV7bWluLWhlaWdodDozMnB4O3BhZGRpbmc6NXB4IDhweDtib3JkZXItcmFkaXVzOjlweDtnYXA6NnB4fQogIC5yZWZOb3RpZnlTdGF0ZSBzdmd7d2lkdGg6MTRweCFpbXBvcnRhbnQ7aGVpZ2h0OjE0cHghaW1wb3J0YW50O2ZsZXg6MCAwIDE0cHh9CiAgLnJlZk5vdGlmeVN0YXRlIHN0cm9uZ3tmb250LXNpemU6MTBweDtsaW5lLWhlaWdodDoxLjE1fQogIC5yZWZOb3RpZnlTdGF0ZSBzcGFue2ZvbnQtc2l6ZTo4LjVweDttYXJnaW4tdG9wOjFweH0KICAucmVmQ2FuY2Vse21pbi1oZWlnaHQ6MjlweCFpbXBvcnRhbnQ7bWFyZ2luLXRvcDo2cHg7cGFkZGluZzo1cHggOHB4IWltcG9ydGFudDtib3JkZXItcmFkaXVzOjhweDtmb250LXNpemU6OS41cHghaW1wb3J0YW50O2xpbmUtaGVpZ2h0OjEuMTU7ZGlzcGxheTpmbGV4O2FsaWduLWl0ZW1zOmNlbnRlcjtqdXN0aWZ5LWNvbnRlbnQ6Y2VudGVyO2dhcDo1cHh9CiAgLnJlZkNhbmNlbCBzdmd7d2lkdGg6MTNweCFpbXBvcnRhbnQ7aGVpZ2h0OjEzcHghaW1wb3J0YW50O2ZsZXg6MCAwIDEzcHh9CgogIC5yZWZQaWNrdXBCb3h7Z3JpZC10ZW1wbGF0ZS1jb2x1bW5zOjMycHggbWlubWF4KDAsMWZyKTtnYXA6OHB4O3BhZGRpbmc6OHB4IDlweDtib3JkZXItcmFkaXVzOjExcHh9CiAgLnJlZlBpY2t1cEljb257d2lkdGg6MzBweDtoZWlnaHQ6MzBweH0KICAucmVmUGlja3VwSWNvbiBzdmd7d2lkdGg6MTZweCFpbXBvcnRhbnQ7aGVpZ2h0OjE2cHghaW1wb3J0YW50fQogIC5yZWZQaWNrdXBCb3ggc3Ryb25ne2ZvbnQtc2l6ZToxMXB4O2xpbmUtaGVpZ2h0OjEuMjttYXJnaW4tYm90dG9tOjJweH0KICAucmVmUGlja3VwQm94IHNwYW57Zm9udC1zaXplOjkuNXB4O2xpbmUtaGVpZ2h0OjEuM30KICAucmVmUGlja3VwQm94IC5waWNrdXBBY3Rpb257bWluLWhlaWdodDozMXB4O21hcmdpbi10b3A6MnB4O3BhZGRpbmc6NXB4IDhweDtmb250LXNpemU6MTBweDtib3JkZXItcmFkaXVzOjhweH0KCiAgLnJlZkJhY2tMaXN0e21pbi1oZWlnaHQ6MzFweCFpbXBvcnRhbnQ7cGFkZGluZzo1cHggOXB4IWltcG9ydGFudDtib3JkZXItcmFkaXVzOjlweDtmb250LXNpemU6MTBweCFpbXBvcnRhbnQ7ZGlzcGxheTpmbGV4O2FsaWduLWl0ZW1zOmNlbnRlcjtqdXN0aWZ5LWNvbnRlbnQ6Y2VudGVyO2dhcDo1cHh9CiAgLnJlZkJhY2tMaXN0IHN2Z3t3aWR0aDoxM3B4IWltcG9ydGFudDtoZWlnaHQ6MTNweCFpbXBvcnRhbnQ7ZmxleDowIDAgMTNweH0KfQpAbWVkaWEobWF4LXdpZHRoOjM5MHB4KXsKICAucmVmUm93cyAucmVmUm93e2dyaWQtdGVtcGxhdGUtY29sdW1uczoxNHB4IDk2cHggbWlubWF4KDAsMWZyKSBhdXRvfQogIC5yZWZTdXBwbGllckFjdGlvbnN7Z3JpZC10ZW1wbGF0ZS1jb2x1bW5zOjFmciAxZnJ9CiAgLnJlZkNhcmR7cGFkZGluZzo4cHh9CiAgLnJlZlByb2R1Y3RJbm5lciBpbWcsLnJlZlByb2R1Y3RQbGFjZWhvbGRlcnt3aWR0aDo1MHB4O2hlaWdodDo1MHB4fQp9Cjwvc3R5bGU+').decode('utf-8')
           pattern = re.compile(r'\n<style>\n/\* Compact sizing to match approved mobile return-detail reference \*/.*?</style>\n', re.S)
           if not pattern.search(s):
               raise SystemExit('Compact mobile sizing block not found')
-          s = pattern.sub('\n' + block.strip() + '\n', s, count=1)
+          s = pattern.sub('\n' + block + '\n', s, count=1)
           p.write_text(s, encoding='utf-8')
           PY
 
