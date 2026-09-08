@@ -45,6 +45,7 @@ function apiTestSalesDrive(){
   const p=PropertiesService.getScriptProperties();
   const apiKey=p.getProperty(SALESDRIVE_CONFIG.apiKeyProperty)||'';
   if(!apiKey) throw new Error('Спочатку збережіть API-ключ заявок SalesDrive.');
+  const statusMap=salesDriveStatusMap_(state.subdomain,apiKey);
   const url='https://'+state.subdomain+'.salesdrive.me/api/order/list/?page=1&limit=1';
   const payload=salesDriveRequestJson_(url,apiKey);
   const first=Array.isArray(payload.data)&&payload.data.length?payload.data[0]:null;
@@ -52,7 +53,8 @@ function apiTestSalesDrive(){
     ok:true,
     sampleOrderId:first?String(first.id||''):'',
     sampleExternalId:first?String(first.externalId||''):'',
-    sampleStatus:first?salesDriveOrderStatusText_(first):'',
+    sampleStatus:first?salesDriveOrderStatusText_(first,statusMap):'',
+    statusCount:Object.keys(statusMap).length,
     state:getSalesDriveState_()
   };
 }
@@ -69,6 +71,7 @@ function syncSalesDrive_(){
   const fromDate=new Date(now.getTime()-lookbackDays*86400000);
   const toDate=new Date(now.getTime()+86400000);
   const normalized=[];
+  const statusMap=salesDriveStatusMap_(state.subdomain,apiKey);
   let received=0,page=1;
 
   while(page<=SALESDRIVE_CONFIG.maxPages){
@@ -76,7 +79,7 @@ function syncSalesDrive_(){
     const payload=salesDriveRequestJson_(url,apiKey);
     const rows=Array.isArray(payload&&payload.data)?payload.data:[];
     received+=rows.length;
-    rows.forEach(raw=>normalizeSalesDriveOrders_(raw).forEach(item=>normalized.push(item)));
+    rows.forEach(raw=>normalizeSalesDriveOrders_(raw,statusMap).forEach(item=>normalized.push(item)));
     if(rows.length<SALESDRIVE_CONFIG.pageSize) break;
     Utilities.sleep(SALESDRIVE_CONFIG.throttleMs);
     page++;
@@ -99,6 +102,7 @@ function syncSalesDrive_(){
     received:received,
     usable:unique.length,
     detectedReturns:detectedReturns,
+    statusCount:Object.keys(statusMap).length,
     inserted:saved.inserted,
     updated:saved.updated,
     pages:page,
@@ -140,8 +144,54 @@ function salesDriveOrdersUrl_(subdomain,page,fromDate,toDate){
   return 'https://'+subdomain+'.salesdrive.me/api/order/list/?'+query;
 }
 
-function normalizeSalesDriveOrders_(raw){
+function salesDriveStatusMap_(subdomain,apiKey){
+  const cache=CacheService.getScriptCache();
+  const cacheKey='SALESDRIVE_STATUS_MAP_'+String(subdomain||'').toLowerCase();
+  const cached=cache.get(cacheKey);
+  if(cached){
+    try{return JSON.parse(cached)||{};}catch(_){ }
+  }
+
+  let payload=null;
+  try{
+    payload=salesDriveRequestJson_('https://'+subdomain+'.salesdrive.me/api/statuses/',apiKey);
+  }catch(_){
+    return {};
+  }
+
+  const map={};
+  const visited=new Set();
+  const collect=value=>{
+    if(value===null||value===undefined) return;
+    if(Array.isArray(value)){
+      value.forEach(collect);
+      return;
+    }
+    if(typeof value!=='object') return;
+    if(visited.has(value)) return;
+    visited.add(value);
+
+    const id=firstValue_(value,['id','statusId','status_id','value','key']);
+    const name=compactText_(firstValue_(value,['name','title','label','text','statusName','status_name']));
+    if(id!==''&&id!==null&&id!==undefined&&name) map[String(id)]=name;
+
+    Object.keys(value).forEach(key=>{
+      const child=value[key];
+      if(/^\d+$/.test(key)&&typeof child==='string'&&child.trim()) map[String(key)]=child.trim();
+      if(child&&typeof child==='object') collect(child);
+    });
+  };
+  collect(payload);
+
+  if(Object.keys(map).length){
+    try{cache.put(cacheKey,JSON.stringify(map),21600);}catch(_){ }
+  }
+  return map;
+}
+
+function normalizeSalesDriveOrders_(raw,statusMap){
   raw=raw||{};
+  statusMap=statusMap||{};
   const deliveries=Array.isArray(raw.ord_delivery_data)?raw.ord_delivery_data:[];
   const usableDeliveries=deliveries.filter(item=>item&&item.trackingNumber);
   if(!usableDeliveries.length) return [];
@@ -159,9 +209,10 @@ function normalizeSalesDriveOrders_(raw){
   const externalId=String(raw.externalId||'');
   const campaign=String(raw.utmCampaign||raw.utmSource||'').trim();
   const isProm=/prom/i.test(campaign);
-  const orderStatusText=salesDriveOrderStatusText_(raw);
+  const orderStatusId=String(firstValue_(raw,['statusId','status_id','status.id','orderStatusId','currentStatusId'])||'').trim();
+  const orderStatusText=salesDriveOrderStatusText_(raw,statusMap);
   const orderStatusIsReturn=looksLikeReturn_(orderStatusText);
-  const statusChangedAt=firstValue_(raw,['statusChangedAt','statusChangeTime','updateTime','updatedAt','editTime','modifiedAt']);
+  const statusChangedAt=firstValue_(raw,['statusChangedAt','statusChangeTime','updateAt','updateTime','updatedAt','editTime','modifiedAt']);
 
   return usableDeliveries.map(delivery=>{
     const provider=String(delivery.provider||'').trim();
@@ -171,7 +222,8 @@ function normalizeSalesDriveOrders_(raw){
     const combinedStatus=[orderStatusText,deliveryStatus].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
     const isReturn=orderStatusIsReturn||looksLikeReturn_(deliveryStatus);
     const noteParts=[];
-    if(orderStatusText) noteParts.push('Статус SalesDrive: '+orderStatusText);
+    if(orderStatusText) noteParts.push('Статус SalesDrive: '+orderStatusText+(orderStatusId?' [ID '+orderStatusId+']':''));
+    else if(orderStatusId) noteParts.push('Статус SalesDrive ID: '+orderStatusId);
     if(delivery.parentTrackingNumber) noteParts.push('Батьківська ТТН: '+delivery.parentTrackingNumber);
     return {
       salesDriveId:String(raw.id||raw.orderId||raw.order_id||''),
@@ -197,9 +249,13 @@ function normalizeSalesDriveOrders_(raw){
   });
 }
 
-function salesDriveOrderStatusText_(raw){
+function salesDriveOrderStatusText_(raw,statusMap){
   raw=raw||{};
+  statusMap=statusMap||{};
+  const statusId=String(firstValue_(raw,['statusId','status_id','status.id','orderStatusId','currentStatusId'])||'').trim();
+  const resolved=statusId&&statusMap[statusId]?String(statusMap[statusId]).trim():'';
   const values=[
+    resolved,
     raw.statusName,
     raw.statusText,
     raw.orderStatusName,
