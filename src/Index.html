@@ -7,37 +7,46 @@
 </head>
 <body>
 <div class="app" id="app">
-  <header class="pageHeader">
-    <div class="brandBlock">
-      <div class="brandIcon" aria-hidden="true">
+  <header class="pageHeader dashboardHero">
+    <div class="brandBlock heroBrand">
+      <div class="brandIcon heroBrandIcon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
       </div>
-      <div>
-        <h1>Відстеження повернень</h1>
+      <div class="heroCopy">
+        <h1><span>Відстеження</span><span>повернень</span></h1>
         <p>Контроль повернень та отримання їх постачальниками</p>
-        <div class="setupLine" id="setupLine">Завантаження…</div>
+        <div class="setupLine heroSetup" id="setupLine">Завантаження…</div>
       </div>
     </div>
-    <div class="headerActions">
-      <div class="periodBox" title="Період повернення">
-        <span class="periodIcon">⌗</span>
-        <input type="date" id="periodFrom" onchange="renderAll()" aria-label="Період від">
-        <span class="periodDash">—</span>
-        <input type="date" id="periodTo" onchange="renderAll()" aria-label="Період до">
+    <div class="headerActions heroActions">
+      <div class="periodSyncCard">
+        <div class="periodBox heroPeriod" title="Період повернення" onclick="toggleMobilePeriod(event)">
+          <span class="heroActionIcon calendarIcon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><circle cx="8" cy="14" r=".7"/><circle cx="12" cy="14" r=".7"/><circle cx="16" cy="14" r=".7"/></svg>
+          </span>
+          <span class="heroPeriodText"><small>Період</small><strong>Період <span class="periodChevron">⌄</span></strong></span>
+          <span class="periodInputs" id="mobilePeriodPanel" onclick="event.stopPropagation()">
+            <input type="date" id="periodFrom" onchange="renderAll()" aria-label="Період від">
+            <span class="periodDash">—</span>
+            <input type="date" id="periodTo" onchange="renderAll()" aria-label="Період до">
+          </span>
+        </div>
+        <button class="heroSync" type="button" onclick="syncNow()" title="Синхронізувати">
+          <span class="heroSyncIcon" aria-hidden="true">↻</span><span>Синхронізація</span>
+        </button>
       </div>
-      <button class="btn secondary" type="button" onclick="openSettings()">Налаштування</button>
-      <button class="btn secondary iconOnlyDesktop" type="button" onclick="syncNow()" title="Синхронізувати">↻ <span>Синхронізувати</span></button>
-      <button class="btn primary" type="button" onclick="openReturnForm()">+ Додати повернення</button>
+      <button class="btn secondary heroSettings" type="button" onclick="openSettings()"><span class="heroBtnIcon">⚙</span><span>Налаштування</span></button>
+      <button class="btn primary heroAdd" type="button" onclick="openReturnForm()"><span class="heroPlus">＋</span><span>Додати</span></button>
     </div>
   </header>
 
   <div class="error" id="error"></div>
 
-  <section class="statsGrid" aria-label="Статистика">
-    <article class="statCard"><div class="statIcon green">▣</div><div><div class="statValue" id="statTotal">0</div><div class="statLabel">Усього повернень</div><div class="statHint">за вибраний період</div></div></article>
-    <article class="statCard"><div class="statIcon amber">◷</div><div><div class="statValue" id="statWaiting">0</div><div class="statLabel">Очікують</div><div class="statHint">потребують контролю</div></div></article>
-    <article class="statCard"><div class="statIcon green">✓</div><div><div class="statValue" id="statPicked">0</div><div class="statLabel">Забрано постачальником</div><div class="statHint">фактично отримано</div></div></article>
-    <article class="statCard"><div class="statIcon neutral">₴</div><div><div class="statValue" id="statAmount">0 ₴</div><div class="statLabel">Сума повернень</div><div class="statHint">за вибраний період</div></div></article>
+  <section class="statsGrid heroStats" aria-label="Статистика">
+    <article class="statCard statTotalCard"><div class="statIcon green">▣</div><span class="statChevron">›</span><div class="statBody"><div class="statValue" id="statTotal">0</div><div class="statLabel">Усього повернень</div><div class="statHint">за вибраний період</div></div></article>
+    <article class="statCard statWaitingCard"><div class="statIcon amber">◷</div><span class="statChevron">›</span><div class="statBody"><div class="statValue" id="statWaiting">0</div><div class="statLabel">Очікують</div><div class="statHint">потребують контролю</div></div></article>
+    <article class="statCard statPickedCard"><div class="statIcon green">✓</div><span class="statChevron">›</span><div class="statBody"><div class="statValue" id="statPicked">0</div><div class="statLabel">Забрано постачальником</div><div class="statHint">фактично отримано</div></div></article>
+    <article class="statCard statAmountCard"><div class="statIcon neutral">▤</div><span class="statChevron">›</span><div class="statBody"><div class="statValue" id="statAmount">0 ₴</div><div class="statLabel">Сума повернень</div><div class="statHint">за вибраний період</div></div></article>
   </section>
 
   <section class="workspaceCard">
@@ -145,8 +154,9 @@ function call(name,args,onSuccess,busyText){
 }
 function loadData(){call('apiDashboard',undefined,data=>{model=data||model;renderAll();},'Завантаження повернень…');}
 function syncNow(){call('apiSync',undefined,data=>{model=data||model;renderAll();toast('Синхронізацію завершено');},'Синхронізація…');}
+function toggleMobilePeriod(event){if(window.innerWidth>760)return;const box=document.querySelector('.heroPeriod');if(!box)return;box.classList.toggle('periodOpen');if(event)event.stopPropagation();}
 function renderAll(){renderSetup();renderStats();renderTabs();renderFilterOptions();renderRows();if(selectedId)renderDetails();}
-function renderSetup(){const s=model.setup||{},active=[];if(s.salesDrive)active.push('SalesDrive');if(s.novaPoshta)active.push('НП');if(s.ukrposhta)active.push('Укрпошта');if(s.prom)active.push('Prom');document.getElementById('setupLine').textContent=active.length?'Підключено: '+active.join(' · ')+' · автооновлення щогодини':'API ще не налаштовані · ручні повернення доступні';}
+function renderSetup(){const s=model.setup||{},active=[];if(s.salesDrive)active.push('SalesDrive');if(s.novaPoshta)active.push('НП');if(s.ukrposhta)active.push('Укрпошта');if(s.prom)active.push('Prom');const el=document.getElementById('setupLine');el.innerHTML=active.length?'<span class=\"setupLinkIcon\">↗</span><span>Підключено: '+active.map(x=>'<strong>'+esc(x)+'</strong>').join(' · ')+' <b>·</b> автооновлення щогодини</span>':'<span class=\"setupLinkIcon\">↗</span><span>API ще не налаштовані · ручні повернення доступні</span>'; }
 
 function filteredRows(ignoreTab){
   const q=(document.getElementById('search').value||'').toLowerCase().trim();
