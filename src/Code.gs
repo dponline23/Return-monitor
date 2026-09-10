@@ -22,7 +22,8 @@ function include_(name){
     content += `<style>
 /* Last-resort header normalization. It is intentionally appended after Styles.html. */
 @media (min-width:761px){
-  .dashboardHero{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:22px!important;margin:0 0 18px!important;padding:0!important;overflow:visible!important}
+  .app{width:100%!important;max-width:none!important;margin:0!important;padding:18px 20px 24px!important}
+  .dashboardHero{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:22px!important;margin:0 0 16px!important;padding:0!important;overflow:visible!important}
   .dashboardHero .heroBrand{display:flex!important;align-items:center!important;gap:14px!important;min-width:330px!important;flex:1 1 auto!important;margin:0!important}
   .dashboardHero .heroBrandIcon{width:48px!important;height:48px!important;min-width:48px!important;border-radius:16px!important}
   .dashboardHero .heroBrandIcon svg{width:28px!important;height:28px!important}
@@ -45,6 +46,12 @@ function include_(name){
   .dashboardHero .heroSyncIcon{display:inline!important;margin:0!important;color:#101828!important;font-size:15px!important;line-height:1!important;font-weight:600!important}
   .dashboardHero .heroSettings,.dashboardHero .heroAdd{display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;width:auto!important;height:42px!important;min-height:42px!important;margin:0!important;padding:0 14px!important;border-radius:11px!important;font-size:12px!important;line-height:1!important;white-space:nowrap!important}
   .dashboardHero .heroBtnIcon,.dashboardHero .heroPlus{font-size:13px!important;line-height:1!important}
+
+  .detailsDrawer.refDetails{width:min(680px,48vw)!important;max-width:680px!important}
+  .tableRow{grid-template-columns:125px 145px 160px minmax(290px,2fr) 145px 145px 150px 100px 112px 46px!important;min-width:1140px!important}
+  .tableRow>.checkCell{display:none!important}
+  .heroStats .statChevron{display:none!important}
+  .statCard{min-height:96px!important;padding:14px 16px!important}
 }
 @media(max-width:760px){
   .dashboardHero{overflow:visible!important}
@@ -53,7 +60,7 @@ function include_(name){
   .periodSyncCard{width:100%!important}
   .heroSettings,.heroAdd{min-width:0!important}
   .heroStats .statCard{position:relative!important}
-  .heroStats .statChevron{left:auto!important;right:13px!important;top:13px!important}
+  .heroStats .statChevron{display:none!important}
 }
 @media(max-width:390px){
   .heroSetup{margin-left:-71px!important;width:calc(100% + 71px)!important}
