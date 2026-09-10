@@ -35,16 +35,17 @@ function normalizeReturnState_(input,applyDefaults){
     if(!o.source) o.source='manual';
   }
 
-  // Carrier status has priority over a stale internal status. Ukrposhta exposes
-  // returned-to-sender as event 41000 + eventReason_id 10 (= 41010). SalesDrive
-  // can store that pair as 4100010, so recognize both forms.
-  if(!o.supplierPickedUp&&isCarrierReturnedToSender_(o)){
-    o.returnStatus='arrived';
-    o.supplierPickupStatus='waiting_pickup';
-    if(!o.returnNumber&&o.source!=='manual') o.returnNumber='';
+  // A carrier-confirmed handover back to the sender is already a completed
+  // return. It must not remain in the active "Прибуло / Очікує забору" list.
+  if(isCarrierReturnedToSender_(o)){
+    o.returnStatus='completed';
+    o.supplierPickupStatus='picked_up';
+    o.supplierPickedUp=true;
+    if(!o.supplierPickedUpAt) o.supplierPickedUpAt=o.arrivedAt||o.returnDate||o.updatedAt||'';
   }
 
   if(o.supplierPickedUp){
+    o.returnStatus=o.returnStatus==='cancelled'?'cancelled':'completed';
     o.supplierPickupStatus='picked_up';
   }else if(o.returnStatus==='arrived'){
     o.supplierPickupStatus='waiting_pickup';
