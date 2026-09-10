@@ -96,6 +96,7 @@ function syncSalesDrive_(){
   preserveKnownSeparateReturnLegs_(unique);
 
   const saved=upsertSalesDriveOrders_(unique);
+  const imageSaved=saveSalesDriveProductImages_(unique);
   const detectedReturns=unique.filter(item=>item.isReturn).length;
   p.setProperty(SALESDRIVE_CONFIG.lastSyncProperty,now.toISOString());
   return {
@@ -103,6 +104,7 @@ function syncSalesDrive_(){
     received:received,
     usable:unique.length,
     detectedReturns:detectedReturns,
+    imagesUpdated:imageSaved,
     statusCount:Object.keys(statusMap).length,
     inserted:saved.inserted,
     updated:saved.updated,
@@ -111,6 +113,23 @@ function syncSalesDrive_(){
     from:fromDate.toISOString(),
     to:toDate.toISOString()
   };
+}
+
+function saveSalesDriveProductImages_(orders){
+  const withImage=(orders||[]).filter(item=>item.productImage&&item.salesDriveId&&item.ttn);
+  if(!withImage.length) return 0;
+  const rows=readReturnRows_();
+  const byKey=new Map(rows.filter(r=>r.salesDriveId&&r.ttn).map(r=>[String(r.salesDriveId)+'|'+normalizeTrackingNumber_(r.ttn),r]));
+  const sh=returnSheetFast_();
+  const col=RETURN_KEYS.indexOf('productImage')+1;
+  let updated=0;
+  withImage.forEach(item=>{
+    const row=byKey.get(String(item.salesDriveId)+'|'+normalizeTrackingNumber_(item.ttn));
+    if(!row||row.productImage) return;
+    sh.getRange(row.rowNumber,col).setValue(String(item.productImage));
+    updated++;
+  });
+  return updated;
 }
 
 function preserveKnownSeparateReturnLegs_(items){
@@ -130,8 +149,6 @@ function preserveKnownSeparateReturnLegs_(items){
     const shipment=normalizeTrackingNumber_(item.ttn||'');
     if(!knownReturn||knownReturn===shipment) return;
 
-    // We already know a distinct return leg for this order. Do not let a later
-    // refresh of the original outbound shipment replace its carrier/status.
     item.isReturn=true;
     item.returnTtn=old.returnTtn;
     item.originalTtn=old.originalTtn||old.ttn||item.originalTtn||item.ttn;
@@ -141,6 +158,7 @@ function preserveKnownSeparateReturnLegs_(items){
     item.statusSource=old.statusSource||item.statusSource;
     item.returnStartedAt=old.returnStartedAt||item.returnStartedAt||'';
     item.arrivedAt=old.arrivedAt||item.arrivedAt||'';
+    item.productImage=old.productImage||item.productImage||'';
   });
   return items;
 }
@@ -241,6 +259,8 @@ function normalizeSalesDriveOrders_(raw,statusMap){
   const customer=[contact.lName,contact.fName,contact.mName].map(v=>String(v||'').trim()).filter(Boolean).join(' ');
   const phone=Array.isArray(contact.phone)?contact.phone.join(', '):String(contact.phone||'');
   const products=Array.isArray(raw.products)?raw.products:[];
+  const firstProduct=products.length?products[0]:{};
+  const directProductImage=salesDriveFindImageUrl_(firstProduct);
   const productText=products.map(item=>{
     const name=String(item.nameTranslate||item.text||item.documentName||item.name||'').trim();
     const qty=Number(item.amount||1);
@@ -289,6 +309,8 @@ function normalizeSalesDriveOrders_(raw,statusMap){
     explicitCandidates.forEach(x=>selected.add(x.index));
   }
 
+  const productImage=selected.size?(directProductImage||salesDriveProductPageImage_(firstProduct)):directProductImage;
+
   return meta.map(m=>{
     const isReturn=selected.has(m.index);
     const combinedStatus=[orderStatusText,m.deliveryStatus].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
@@ -310,6 +332,7 @@ function normalizeSalesDriveOrders_(raw,statusMap){
       customer:customer,
       phone:phone,
       product:productText,
+      productImage:productImage,
       sku:skuText,
       amount:Number(raw.paymentAmount||raw.total||raw.amount||0),
       carrier:m.carrier,
@@ -327,6 +350,85 @@ function normalizeSalesDriveOrders_(raw,statusMap){
       note:noteParts.join(' · ')
     };
   });
+}
+
+function salesDriveFindImageUrl_(product){
+  if(!product||typeof product!=='object') return '';
+  const directKeys=['image','imageUrl','imageURL','photo','photoUrl','photoURL','picture','pictureUrl','pictureURL','thumbnail','thumbnailUrl','mainImage','mainPhoto','images','photos','pictures'];
+  const normalize=value=>{
+    if(typeof value!=='string') return '';
+    let url=value.trim().replace(/^['\"]|['\"]$/g,'');
+    if(!url) return '';
+    if(/^\/\//.test(url)) url='https:'+url;
+    if(/^\//.test(url)) url='https://'+getSalesDriveState_().subdomain+'.salesdrive.me'+url;
+    return /^https?:\/\//i.test(url)?url:'';
+  };
+  const inspect=(value,depth)=>{
+    if(depth>3||value===null||value===undefined) return '';
+    if(typeof value==='string') return normalize(value);
+    if(Array.isArray(value)){
+      for(let i=0;i<value.length;i++){
+        const found=inspect(value[i],depth+1);
+        if(found) return found;
+      }
+      return '';
+    }
+    if(typeof value!=='object') return '';
+    for(let i=0;i<directKeys.length;i++){
+      const key=directKeys[i];
+      if(Object.prototype.hasOwnProperty.call(value,key)){
+        const found=inspect(value[key],depth+1);
+        if(found) return found;
+      }
+    }
+    const keys=Object.keys(value).filter(key=>/image|photo|picture|thumb/i.test(key));
+    for(let i=0;i<keys.length;i++){
+      const found=inspect(value[keys[i]],depth+1);
+      if(found) return found;
+    }
+    return '';
+  };
+  return inspect(product,0);
+}
+
+function salesDriveProductPageImage_(product){
+  product=product||{};
+  let href=String(firstValue_(product,['href','url','link','productUrl','productURL'])||'').trim();
+  if(!href) return '';
+  if(/^\/\//.test(href)) href='https:'+href;
+  if(/^\//.test(href)) href='https://'+getSalesDriveState_().subdomain+'.salesdrive.me'+href;
+  if(!/^https?:\/\//i.test(href)) return '';
+
+  const cache=CacheService.getScriptCache();
+  const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.MD5,href,Utilities.Charset.UTF_8);
+  const key='RM_IMG_'+Utilities.base64EncodeWebSafe(digest).replace(/=+$/,'').slice(0,32);
+  const cached=cache.get(key);
+  if(cached!==null) return cached==='-'?'':cached;
+
+  let image='';
+  try{
+    const response=UrlFetchApp.fetch(href,{method:'get',muteHttpExceptions:true,followRedirects:true,headers:{'User-Agent':'Mozilla/5.0'}});
+    if(response.getResponseCode()>=200&&response.getResponseCode()<400){
+      const html=response.getContentText('UTF-8').slice(0,500000);
+      const patterns=[
+        /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+        /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+        /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i
+      ];
+      for(let i=0;i<patterns.length&&!image;i++){
+        const match=html.match(patterns[i]);
+        if(match&&match[1]) image=String(match[1]).replace(/&amp;/g,'&').trim();
+      }
+      if(image&&/^\/\//.test(image)) image='https:'+image;
+      if(image&&/^\//.test(image)){
+        const origin=href.match(/^(https?:\/\/[^\/]+)/i);
+        if(origin) image=origin[1]+image;
+      }
+      if(image&&!/^https?:\/\//i.test(image)) image='';
+    }
+  }catch(_){ image=''; }
+  try{cache.put(key,image||'-',21600);}catch(_){ }
+  return image;
 }
 
 function salesDriveCollectDeliveries_(raw){
