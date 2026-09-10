@@ -93,6 +93,8 @@ function syncSalesDrive_(){
     unique.push(item);
   });
 
+  preserveKnownSeparateReturnLegs_(unique);
+
   const saved=upsertSalesDriveOrders_(unique);
   const detectedReturns=unique.filter(item=>item.isReturn).length;
   p.setProperty(SALESDRIVE_CONFIG.lastSyncProperty,now.toISOString());
@@ -109,6 +111,38 @@ function syncSalesDrive_(){
     from:fromDate.toISOString(),
     to:toDate.toISOString()
   };
+}
+
+function preserveKnownSeparateReturnLegs_(items){
+  if(!items||!items.length) return items||[];
+  let current=[];
+  try{ current=readReturnRows_(); }catch(_){ return items; }
+  const byShipment=new Map();
+  current.forEach(row=>{
+    const key=String(row.salesDriveId||'')+'|'+normalizeTrackingNumber_(row.ttn||'');
+    if(row.salesDriveId&&row.ttn) byShipment.set(key,row);
+  });
+
+  items.forEach(item=>{
+    const old=byShipment.get(String(item.salesDriveId||'')+'|'+normalizeTrackingNumber_(item.ttn||''));
+    if(!old) return;
+    const knownReturn=normalizeTrackingNumber_(old.returnTtn||'');
+    const shipment=normalizeTrackingNumber_(item.ttn||'');
+    if(!knownReturn||knownReturn===shipment) return;
+
+    // We already know a distinct return leg for this order. Do not let a later
+    // refresh of the original outbound shipment replace its carrier/status.
+    item.isReturn=true;
+    item.returnTtn=old.returnTtn;
+    item.originalTtn=old.originalTtn||old.ttn||item.originalTtn||item.ttn;
+    item.carrier=old.carrier||item.carrier;
+    item.deliveryStatus=old.deliveryStatus||item.deliveryStatus;
+    item.deliveryCode=old.deliveryCode||item.deliveryCode;
+    item.statusSource=old.statusSource||item.statusSource;
+    item.returnStartedAt=old.returnStartedAt||item.returnStartedAt||'';
+    item.arrivedAt=old.arrivedAt||item.arrivedAt||'';
+  });
+  return items;
 }
 
 function salesDriveActiveLookbackDays_(){
@@ -220,6 +254,7 @@ function normalizeSalesDriveOrders_(raw,statusMap){
   const orderStatusText=salesDriveOrderStatusText_(raw,statusMap);
   const orderStatusIsReturn=looksLikeReturn_(orderStatusText);
   const statusChangedAt=firstValue_(raw,['statusChangedAt','statusChangeTime','updateAt','updateTime','updatedAt','editTime','modifiedAt']);
+  const primaryCarrier=salesDriveCarrierName_('',raw.shipping_method);
 
   const meta=usableDeliveries.map((delivery,index)=>{
     const provider=String(delivery.provider||'').trim();
@@ -233,6 +268,7 @@ function normalizeSalesDriveOrders_(raw,statusMap){
     let score=0;
     if(explicit) score+=40;
     if(parentTracking&&parentTracking!==trackingNumber&&!redirection) score+=100;
+    if(orderStatusIsReturn&&carrier&&primaryCarrier&&carrier!==primaryCarrier&&!redirection) score+=70;
     if(isCarrierReturnedToSender_({carrier:carrier,deliveryCode:code,deliveryStatus:deliveryStatus})) score+=80;
     if(/повернен|поверта|зворотн/i.test(deliveryStatus)) score+=50;
     if(/відмов/i.test(deliveryStatus)) score+=20;
@@ -294,23 +330,28 @@ function normalizeSalesDriveOrders_(raw,statusMap){
 }
 
 function salesDriveCollectDeliveries_(raw){
-  const out=[];
-  const seen=new Set();
+  const byTracking=new Map();
   const add=(value,providerHint)=>{
     if(!value) return;
     if(Array.isArray(value)){ value.forEach(item=>add(item,providerHint)); return; }
     if(typeof value!=='object') return;
     const tracking=String(firstValue_(value,['trackingNumber','EN','barcode','ttn','number'])||'').trim();
     if(!tracking) return;
+    const key=tracking.replace(/\s+/g,'').toUpperCase();
     const provider=String(value.provider||providerHint||'').trim();
-    const key=(provider||'unknown').toLowerCase()+'|'+tracking.replace(/\s+/g,'').toUpperCase();
-    if(seen.has(key)) return;
-    seen.add(key);
-    const item=Object.assign({},value);
-    item.trackingNumber=tracking;
-    if(!item.provider&&provider) item.provider=provider;
-    if(item.statusText===undefined&&item.status!==undefined) item.statusText=item.status;
-    out.push(item);
+    const incoming=Object.assign({},value);
+    incoming.trackingNumber=tracking;
+    if(!incoming.provider&&provider) incoming.provider=provider;
+    if(incoming.statusText===undefined&&incoming.status!==undefined) incoming.statusText=incoming.status;
+
+    const existing=byTracking.get(key);
+    if(!existing){ byTracking.set(key,incoming); return; }
+    const merged=Object.assign({},existing);
+    Object.keys(incoming).forEach(k=>{
+      const v=incoming[k];
+      if(v!==undefined&&v!==null&&String(v)!=='') merged[k]=v;
+    });
+    byTracking.set(key,merged);
   };
 
   add(raw.ord_delivery_data,'');
@@ -321,7 +362,7 @@ function salesDriveCollectDeliveries_(raw){
   add(raw.ord_rozetka_delivery,'rozetka');
   add(raw.ord_meest,'meest');
   add(raw.ord_meest_express,'meest');
-  return out;
+  return Array.from(byTracking.values());
 }
 
 function salesDriveDeliveryReturnSignal_(carrier,code,status){
@@ -332,7 +373,7 @@ function salesDriveDeliveryReturnSignal_(carrier,code,status){
   if(looksLikeReturn_(text)||looksLikeReturnArrived_(text)) return true;
   if(/нова|novaposhta/.test(c)&&normalizedCode==='102') return true;
   if(/укр|ukrposhta/.test(c)&&(/^(31200|41010|4100010|35500)$/.test(normalizedCode))) return true;
-  if(/rozetka|розетка/.test(c)&&/^(50011|50020)$/.test(normalizedCode)) return true;
+  if(/rozetka|розетка/.test(c)&&/^(50011|50020|60040)$/.test(normalizedCode)) return true;
   return false;
 }
 
