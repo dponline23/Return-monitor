@@ -35,15 +35,8 @@ function normalizeReturnState_(input,applyDefaults){
     if(!o.source) o.source='manual';
   }
 
-  // A carrier-confirmed handover back to the sender is already a completed
-  // return. It must not remain in the active "Прибуло / Очікує забору" list.
-  if(isCarrierReturnedToSender_(o)){
-    o.returnStatus='completed';
-    o.supplierPickupStatus='picked_up';
-    o.supplierPickedUp=true;
-    if(!o.supplierPickedUpAt) o.supplierPickedUpAt=o.arrivedAt||o.returnDate||o.updatedAt||'';
-  }
-
+  // ВАЖЛИВО: статус перевізника ніколи сам не означає, що постачальник
+  // фактично забрав товар. "Забрано" ставиться лише окремою дією користувача.
   if(o.supplierPickedUp){
     o.returnStatus=o.returnStatus==='cancelled'?'cancelled':'completed';
     o.supplierPickupStatus='picked_up';
