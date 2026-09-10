@@ -63,7 +63,7 @@ function trackNovaPoshta_(ttn){
   const isEasyReturnLeg=Boolean(lightReturnOriginal&&lightReturnOriginal!==queried);
   const isReturn=isEasyReturnLeg||explicitReturnText;
   const delivered=/^(9|10|11)$/.test(statusCode)||/отриман|вручен|доставлен/i.test(status);
-  const arrived=isReturn&&delivered;
+  const picked=isReturn&&delivered;
   const statusDate=firstValue_(item,['ActualDeliveryDate','RecipientDateTime','WarehouseRecipient','DateScan','ScheduledDeliveryDate']);
   const when=dateIso_(statusDate)||'';
 
@@ -74,8 +74,8 @@ function trackNovaPoshta_(ttn){
     statusCode:statusCode,
     isReturn:isReturn,
     returnStartedAt:isReturn?(when||new Date().toISOString()):'',
-    arrivedAt:arrived?(when||new Date().toISOString()):'',
-    pickedUpAt:arrived?(when||new Date().toISOString()):'',
+    arrivedAt:picked?(when||new Date().toISOString()):'',
+    pickedUpAt:picked?(when||new Date().toISOString()):'',
     originalTtn:isEasyReturnLeg?lightReturnOriginal:'',
     returnTtn:isEasyReturnLeg?queried:'',
     raw:item
@@ -116,12 +116,19 @@ function trackUkrposhta_(ttn){
     return Number(a&&a.step||0)-Number(b&&b.step||0);
   });
 
-  const returnEvent=history.find(item=>String(item&&item.event||'').replace(/\s/g,'')==='31200');
+  const returnIndex=history.findIndex(item=>String(item&&item.event||'').replace(/\s/g,'')==='31200');
+  const returnEvent=returnIndex>=0?history[returnIndex]:null;
+  const returnPhase=returnIndex>=0?history.slice(returnIndex+1):[];
   const returnedEvent=history.slice().reverse().find(item=>{
     const event=String(item&&item.event||'').replace(/\s/g,'');
     const reason=String(item&&item.eventReason_id||'').replace(/\s/g,'');
     return (event==='41000'&&reason==='10')||event==='35500';
   });
+  const arrivedReturnEvent=returnPhase.slice().reverse().find(item=>{
+    const event=String(item&&item.event||'').replace(/\s/g,'');
+    return event==='21700'||event==='21400';
+  });
+
   const latest=history[history.length-1]||{};
   const latestEvent=String(latest.event||'').replace(/\s/g,'');
   const latestReason=String(latest.eventReason_id||'').replace(/\s/g,'');
@@ -129,6 +136,7 @@ function trackUkrposhta_(ttn){
   const statusText=[compactText_(latest.eventName||''),compactText_(latest.eventReason||'')]
     .filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
   const returnedAt=returnedEvent?dateIso_(returnedEvent.date):'';
+  const arrivedAt=returnedAt||(arrivedReturnEvent?dateIso_(arrivedReturnEvent.date):'');
 
   return {
     source:'Укрпошта',
@@ -137,7 +145,7 @@ function trackUkrposhta_(ttn){
     statusCode:effectiveCode,
     isReturn:Boolean(returnEvent||returnedEvent),
     returnStartedAt:returnEvent?dateIso_(returnEvent.date):'',
-    arrivedAt:returnedAt,
+    arrivedAt:arrivedAt,
     pickedUpAt:returnedAt,
     originalTtn:String(ttn||''),
     returnTtn:Boolean(returnEvent||returnedEvent)?String(ttn||''):'',
