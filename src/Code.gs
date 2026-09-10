@@ -15,7 +15,29 @@ function doGet(){
     .addMetaTag('viewport','width=device-width, initial-scale=1');
 }
 
-function include_(name){ return HtmlService.createHtmlOutputFromFile(name).getContent(); }
+function include_(name){
+  let content=HtmlService.createHtmlOutputFromFile(name).getContent();
+  if(name==='Styles'){
+    // Repair the accidentally committed literal "\\n" sequences in the mobile CSS block.
+    content=content.replace(/\\n/g,'\n');
+    // Final mobile overrides keep the header composition aligned with the approved reference.
+    content += `<style>
+@media(max-width:760px){
+  .dashboardHero{overflow:visible!important}
+  .heroCopy h1 span{display:block!important}
+  .heroSetup{margin-left:-82px!important;width:calc(100% + 82px)!important;max-width:none!important}
+  .periodSyncCard{width:100%!important}
+  .heroSettings,.heroAdd{min-width:0!important}
+  .heroStats .statCard{position:relative!important}
+  .heroStats .statChevron{left:auto!important;right:13px!important;top:13px!important}
+}
+@media(max-width:390px){
+  .heroSetup{margin-left:-71px!important;width:calc(100% + 71px)!important}
+}
+</style>`;
+  }
+  return content;
+}
 
 function onOpen(){
   try{
