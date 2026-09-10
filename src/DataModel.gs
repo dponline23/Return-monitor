@@ -34,6 +34,16 @@ function normalizeReturnState_(input,applyDefaults){
     if(!o.supplierPickupStatus) o.supplierPickupStatus='not_handed_over';
     if(!o.source) o.source='manual';
   }
+
+  // Carrier status has priority over a stale internal status. Ukrposhta exposes
+  // returned-to-sender as event 41000 + eventReason_id 10 (= 41010). SalesDrive
+  // can store that pair as 4100010, so recognize both forms.
+  if(!o.supplierPickedUp&&isCarrierReturnedToSender_(o)){
+    o.returnStatus='arrived';
+    o.supplierPickupStatus='waiting_pickup';
+    if(!o.returnNumber&&o.source!=='manual') o.returnNumber='';
+  }
+
   if(o.supplierPickedUp){
     o.supplierPickupStatus='picked_up';
   }else if(o.returnStatus==='arrived'){
@@ -42,6 +52,20 @@ function normalizeReturnState_(input,applyDefaults){
     o.supplierPickupStatus='not_handed_over';
   }
   return o;
+}
+
+function isCarrierReturnedToSender_(row){
+  row=row||{};
+  const carrier=String(row.carrier||'').toLowerCase();
+  const code=String(row.deliveryCode||'').replace(/\s+/g,'');
+  const text=String(row.deliveryStatus||'').toLowerCase();
+
+  if(/укр|ukrposhta/.test(carrier)){
+    if(code==='41010'||code==='4100010'||code==='35500') return true;
+    if(/^41000(?:10)$/.test(code)) return true;
+  }
+
+  return /вручено\s+відправнику|вручено:\s*відправнику|повернен.{0,40}вручено.{0,30}відправник|повернут.{0,40}відправник|отримано\s+відправником/i.test(text);
 }
 
 function isReturnRecord_(row){
