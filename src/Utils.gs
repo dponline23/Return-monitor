@@ -1,13 +1,39 @@
 function dateIso_(value){
   if(!value) return '';
-  const d=value instanceof Date?value:new Date(value);
-  return isNaN(d.getTime())?'':d.toISOString();
+  const d=parseDate_(value);
+  return d&&d instanceof Date&&!isNaN(d.getTime())?d.toISOString():'';
 }
 
 function parseDate_(value){
   if(!value) return '';
-  const d=value instanceof Date?value:new Date(value);
-  return isNaN(d.getTime())?'':d;
+  if(value instanceof Date) return isNaN(value.getTime())?'':value;
+
+  const text=String(value).trim();
+  if(!text) return '';
+
+  // ISO / RFC formats first.
+  const nativeDate=new Date(text);
+  if(!isNaN(nativeDate.getTime())) return nativeDate;
+
+  // Carrier APIs and SalesDrive also return localized dates such as
+  // 03.09.2026 17:45:47. Parse those explicitly in the project timezone.
+  const formats=[
+    'dd.MM.yyyy HH:mm:ss',
+    'dd.MM.yyyy HH:mm',
+    'dd.MM.yyyy',
+    'dd-MM-yyyy HH:mm:ss',
+    'dd-MM-yyyy HH:mm',
+    'dd-MM-yyyy',
+    'yyyy-MM-dd HH:mm:ss',
+    'yyyy-MM-dd HH:mm'
+  ];
+  for(let i=0;i<formats.length;i++){
+    try{
+      const d=Utilities.parseDate(text,'Europe/Kyiv',formats[i]);
+      if(d&&!isNaN(d.getTime())) return d;
+    }catch(_){ }
+  }
+  return '';
 }
 
 function toBool_(value){
@@ -16,8 +42,8 @@ function toBool_(value){
 }
 
 function daysBetween_(a,b){
-  const x=new Date(a),y=new Date(b);
-  if(isNaN(x.getTime())||isNaN(y.getTime())) return 0;
+  const x=parseDate_(a),y=parseDate_(b);
+  if(!x||!y) return 0;
   return Math.max(0,Math.floor((y.getTime()-x.getTime())/86400000));
 }
 
