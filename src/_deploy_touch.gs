@@ -1,1 +1,1 @@
-// Deployment trigger: repaired mobile dashboard top 2026-09-10.
+// Deployment trigger: final mobile dashboard fix 2026-09-10 12:12.
