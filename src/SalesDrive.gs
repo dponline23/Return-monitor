@@ -7,7 +7,8 @@ const SALESDRIVE_CONFIG = Object.freeze({
   maxPages: 40,
   throttleMs: 6200,
   initialLookbackDays: 60,
-  regularLookbackDays: 21
+  regularLookbackDays: 21,
+  maxActiveLookbackDays: 60
 });
 
 function getSalesDriveState_(){
@@ -65,7 +66,7 @@ function syncSalesDrive_(){
 
   const now=new Date();
   const lastSync=parseDate_(state.lastSync);
-  const lookbackDays=lastSync?SALESDRIVE_CONFIG.regularLookbackDays:SALESDRIVE_CONFIG.initialLookbackDays;
+  const lookbackDays=lastSync?salesDriveActiveLookbackDays_():SALESDRIVE_CONFIG.initialLookbackDays;
   const fromDate=new Date(now.getTime()-lookbackDays*86400000);
   const toDate=new Date(now.getTime()+86400000);
   const normalized=[];
@@ -104,9 +105,25 @@ function syncSalesDrive_(){
     inserted:saved.inserted,
     updated:saved.updated,
     pages:page,
+    lookbackDays:lookbackDays,
     from:fromDate.toISOString(),
     to:toDate.toISOString()
   };
+}
+
+function salesDriveActiveLookbackDays_(){
+  let days=SALESDRIVE_CONFIG.regularLookbackDays;
+  try{
+    const now=Date.now();
+    readReturnRows_().forEach(row=>{
+      if(String(row.source||'').toLowerCase()!=='salesdrive'||row.supplierPickedUp||!isReturnRecord_(row)) return;
+      const d=parseDate_(row.orderDate||row.createdAt);
+      if(!d) return;
+      const age=Math.ceil((now-d.getTime())/86400000)+2;
+      if(age>days) days=age;
+    });
+  }catch(_){ }
+  return Math.max(SALESDRIVE_CONFIG.regularLookbackDays,Math.min(SALESDRIVE_CONFIG.maxActiveLookbackDays,days));
 }
 
 function salesDriveRequestJson_(url,apiKey){
@@ -183,8 +200,7 @@ function salesDriveStatusMap_(subdomain,apiKey){
 function normalizeSalesDriveOrders_(raw,statusMap){
   raw=raw||{};
   statusMap=statusMap||{};
-  const deliveries=Array.isArray(raw.ord_delivery_data)?raw.ord_delivery_data:[];
-  const usableDeliveries=deliveries.filter(item=>item&&item.trackingNumber);
+  const usableDeliveries=salesDriveCollectDeliveries_(raw);
   if(!usableDeliveries.length) return [];
 
   const contact=raw.primaryContact||((Array.isArray(raw.contacts)&&raw.contacts[0])||{});
@@ -192,7 +208,7 @@ function normalizeSalesDriveOrders_(raw,statusMap){
   const phone=Array.isArray(contact.phone)?contact.phone.join(', '):String(contact.phone||'');
   const products=Array.isArray(raw.products)?raw.products:[];
   const productText=products.map(item=>{
-    const name=String(item.nameTranslate||item.text||item.documentName||'').trim();
+    const name=String(item.nameTranslate||item.text||item.documentName||item.name||'').trim();
     const qty=Number(item.amount||1);
     return name+(qty>1?' ×'+qty:'');
   }).filter(Boolean).join('; ');
@@ -205,20 +221,51 @@ function normalizeSalesDriveOrders_(raw,statusMap){
   const orderStatusIsReturn=looksLikeReturn_(orderStatusText);
   const statusChangedAt=firstValue_(raw,['statusChangedAt','statusChangeTime','updateAt','updateTime','updatedAt','editTime','modifiedAt']);
 
-  return usableDeliveries.map(delivery=>{
+  const meta=usableDeliveries.map((delivery,index)=>{
     const provider=String(delivery.provider||'').trim();
     const carrier=salesDriveCarrierName_(provider,raw.shipping_method);
     const code=delivery.statusCode===undefined||delivery.statusCode===null?'':String(delivery.statusCode);
     const deliveryStatus=compactText_(firstValue_(delivery,['statusText','status','statusDescription','deliveryStatus','state'])) || (code?'SalesDrive · код '+code:'');
-    const combinedStatus=[orderStatusText,deliveryStatus].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
-    const isReturn=orderStatusIsReturn||looksLikeReturn_(deliveryStatus);
-    const returnArrived=isReturn&&looksLikeReturnArrived_(combinedStatus);
-    const trackingNumber=String(delivery.trackingNumber||'');
-    const parentTracking=String(delivery.parentTrackingNumber||'');
+    const trackingNumber=String(firstValue_(delivery,['trackingNumber','EN','barcode','ttn','number'])||'').trim();
+    const parentTracking=String(firstValue_(delivery,['parentTrackingNumber','parentEN','parentBarcode','parentTtn'])||'').trim();
+    const explicit=salesDriveDeliveryReturnSignal_(carrier,code,deliveryStatus);
+    const redirection=salesDriveDeliveryIsRedirection_(carrier,code,deliveryStatus,orderStatusText);
+    let score=0;
+    if(explicit) score+=40;
+    if(parentTracking&&parentTracking!==trackingNumber&&!redirection) score+=100;
+    if(isCarrierReturnedToSender_({carrier:carrier,deliveryCode:code,deliveryStatus:deliveryStatus})) score+=80;
+    if(/повернен|поверта|зворотн/i.test(deliveryStatus)) score+=50;
+    if(/відмов/i.test(deliveryStatus)) score+=20;
+    const changed=parseDate_(firstValue_(delivery,['dateStatusUpdate','statusChangedAt','updatedAt','deliveryDateAndTime','recipientDateTime']));
+    if(changed) score+=Math.min(10,changed.getTime()/1e12);
+    return {index:index,delivery:delivery,provider:provider,carrier:carrier,code:code,deliveryStatus:deliveryStatus,trackingNumber:trackingNumber,parentTracking:parentTracking,explicit:explicit,redirection:redirection,score:score};
+  });
+
+  let selected=new Set();
+  const explicitCandidates=meta.filter(x=>x.explicit&&!x.redirection);
+  if(orderStatusIsReturn){
+    const candidates=(explicitCandidates.length?explicitCandidates:meta.filter(x=>!x.redirection));
+    if(candidates.length){
+      const best=candidates.slice().sort((a,b)=>b.score-a.score)[0];
+      selected.add(best.index);
+    }
+  }else{
+    explicitCandidates.forEach(x=>selected.add(x.index));
+  }
+
+  return meta.map(m=>{
+    const isReturn=selected.has(m.index);
+    const combinedStatus=[orderStatusText,m.deliveryStatus].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
+    const returnArrived=isReturn&&salesDriveReturnArrived_(m.carrier,m.code,combinedStatus);
+    const returnedToSender=isReturn&&isCarrierReturnedToSender_({carrier:m.carrier,deliveryCode:m.code,deliveryStatus:combinedStatus});
     const noteParts=[];
     if(orderStatusText) noteParts.push('Статус SalesDrive: '+orderStatusText+(orderStatusId?' [ID '+orderStatusId+']':''));
     else if(orderStatusId) noteParts.push('Статус SalesDrive ID: '+orderStatusId);
-    if(parentTracking) noteParts.push('Батьківська ТТН: '+parentTracking);
+    if(m.parentTracking) noteParts.push('Батьківська ТТН: '+m.parentTracking);
+
+    const statusTime=firstValue_(m.delivery,['dateStatusUpdate','statusChangedAt','updatedAt'])||statusChangedAt||'';
+    const arrivalTime=returnArrived?(firstValue_(m.delivery,['deliveryDateAndTime','dateStatusUpdate','statusChangedAt'])||statusChangedAt||''):'';
+
     return {
       salesDriveId:String(raw.id||raw.orderId||raw.order_id||''),
       orderNumber:externalId||String(raw.id||''),
@@ -229,20 +276,79 @@ function normalizeSalesDriveOrders_(raw,statusMap){
       product:productText,
       sku:skuText,
       amount:Number(raw.paymentAmount||raw.total||raw.amount||0),
-      carrier:carrier,
-      ttn:trackingNumber,
-      originalTtn:parentTracking||trackingNumber,
-      returnTtn:isReturn?trackingNumber:'',
+      carrier:m.carrier,
+      ttn:m.trackingNumber,
+      originalTtn:m.parentTracking||m.trackingNumber,
+      returnTtn:isReturn?m.trackingNumber:'',
       deliveryStatus:combinedStatus,
-      deliveryCode:code,
+      deliveryCode:m.code,
       isReturn:isReturn,
-      returnStartedAt:isReturn?(statusChangedAt||''):'',
-      arrivedAt:returnArrived?(delivery.deliveryDateAndTime||statusChangedAt||''):'',
+      returnStartedAt:isReturn?(statusTime||''):'',
+      arrivedAt:returnArrived?(arrivalTime||''):'',
+      returnedToSender:returnedToSender,
       statusSource:'SalesDrive',
       promId:isProm?externalId:'',
       note:noteParts.join(' · ')
     };
   });
+}
+
+function salesDriveCollectDeliveries_(raw){
+  const out=[];
+  const seen=new Set();
+  const add=(value,providerHint)=>{
+    if(!value) return;
+    if(Array.isArray(value)){ value.forEach(item=>add(item,providerHint)); return; }
+    if(typeof value!=='object') return;
+    const tracking=String(firstValue_(value,['trackingNumber','EN','barcode','ttn','number'])||'').trim();
+    if(!tracking) return;
+    const provider=String(value.provider||providerHint||'').trim();
+    const key=(provider||'unknown').toLowerCase()+'|'+tracking.replace(/\s+/g,'').toUpperCase();
+    if(seen.has(key)) return;
+    seen.add(key);
+    const item=Object.assign({},value);
+    item.trackingNumber=tracking;
+    if(!item.provider&&provider) item.provider=provider;
+    if(item.statusText===undefined&&item.status!==undefined) item.statusText=item.status;
+    out.push(item);
+  };
+
+  add(raw.ord_delivery_data,'');
+  add(raw.ord_delivery,'');
+  add(raw.ord_novaposhta,'novaposhta');
+  add(raw.ord_ukrposhta,'ukrposhta');
+  add(raw.ord_rozetka,'rozetka');
+  add(raw.ord_rozetka_delivery,'rozetka');
+  add(raw.ord_meest,'meest');
+  add(raw.ord_meest_express,'meest');
+  return out;
+}
+
+function salesDriveDeliveryReturnSignal_(carrier,code,status){
+  const c=String(carrier||'').toLowerCase();
+  const normalizedCode=String(code||'').replace(/\s+/g,'');
+  const text=String(status||'');
+  if(salesDriveDeliveryIsRedirection_(carrier,code,status,'')) return false;
+  if(looksLikeReturn_(text)||looksLikeReturnArrived_(text)) return true;
+  if(/нова|novaposhta/.test(c)&&normalizedCode==='102') return true;
+  if(/укр|ukrposhta/.test(c)&&(/^(31200|41010|4100010|35500)$/.test(normalizedCode))) return true;
+  if(/rozetka|розетка/.test(c)&&/^(50011|50020)$/.test(normalizedCode)) return true;
+  return false;
+}
+
+function salesDriveDeliveryIsRedirection_(carrier,code,status,orderStatusText){
+  const c=String(carrier||'').toLowerCase();
+  const normalizedCode=String(code||'').replace(/\s+/g,'');
+  const text=[status,orderStatusText].filter(Boolean).join(' · ').toLowerCase();
+  if(/переадрес|змінен[оа]\s+адрес|змін[а-яіїєґ]*\s+адрес|redirect|address\s+chang/i.test(text)&&!/відмов|повернен|return\s+to\s+sender/i.test(text)) return true;
+  if(/нова|novaposhta/.test(c)&&normalizedCode==='104'&&!/відмов|повернен/i.test(text)) return true;
+  return false;
+}
+
+function salesDriveReturnArrived_(carrier,code,status){
+  if(isCarrierReturnedToSender_({carrier:carrier,deliveryCode:code,deliveryStatus:status})) return true;
+  const text=String(status||'').toLowerCase();
+  return /повернен.{0,45}прибул.{0,30}(відділен|точк|пункт)|прибул.{0,30}(відділен|точк|пункт).{0,45}повернен/i.test(text)||looksLikeReturnArrived_(text);
 }
 
 function salesDriveOrderStatusText_(raw,statusMap){
