@@ -11,10 +11,10 @@ function buildDashboard_(){
     if(picked) counts.picked++;
     amount+=Number(row.amount||0);
 
-    // "Днів очікування" рахуємо ТІЛЬКИ від фактичного прибуття
-    // повернення у точку видачі постачальнику. Дата замовлення, створення
-    // заявки або початку повернення тут не використовуються.
-    row.daysWaiting=validSupplierWaitingDays_(row);
+    // Лічильник показує, скільки календарних днів повернення вже лежить
+    // у точці видачі та очікує, поки постачальник його забере.
+    // Єдине джерело для відліку — arrivedAt.
+    row.daysWaiting=supplierWaitingCalendarDays_(row);
   });
 
   rows.sort((a,b)=>{
@@ -35,7 +35,7 @@ function buildDashboard_(){
   };
 }
 
-function validSupplierWaitingDays_(row){
+function supplierWaitingCalendarDays_(row){
   if(!row||row.supplierPickedUp||row.supplierPickupStatus!=='waiting_pickup') return 0;
   const arrived=parseDate_(row.arrivedAt);
   if(!arrived) return 0;
@@ -43,20 +43,14 @@ function validSupplierWaitingDays_(row){
   const now=new Date();
   if(arrived.getTime()>now.getTime()) return 0;
 
-  // Захист від старих помилкових даних: якщо "дата прибуття" раніша
-  // за початок повернення, її не можна використовувати для лічильника.
-  const started=parseDate_(row.returnStartedAt);
-  if(started&&arrived.getTime()<started.getTime()) return 0;
-
-  // Ще один захист для старих SalesDrive-записів, де дата замовлення
-  // колись помилково могла потрапити в arrivedAt.
-  const orderDate=parseDate_(row.orderDate);
-  if(!started&&String(row.source||'').toLowerCase()==='salesdrive'&&orderDate){
-    const delta=Math.abs(arrived.getTime()-orderDate.getTime());
-    if(delta<36*60*60*1000) return 0;
-  }
-
-  return daysBetween_(arrived,now);
+  // Рахуємо календарні дні у часовому поясі України, а не повні 24 години.
+  // Напр., прибуло вчора ввечері -> сьогодні вже "1 дн. очікування".
+  const tz='Europe/Kyiv';
+  const a=Utilities.formatDate(arrived,tz,'yyyy-MM-dd').split('-').map(Number);
+  const b=Utilities.formatDate(now,tz,'yyyy-MM-dd').split('-').map(Number);
+  const aUtc=Date.UTC(a[0],a[1]-1,a[2]);
+  const bUtc=Date.UTC(b[0],b[1]-1,b[2]);
+  return Math.max(0,Math.floor((bUtc-aUtc)/86400000));
 }
 
 function looksLikeReturn_(status){
