@@ -1,7 +1,7 @@
 function refreshTracking_(){
   const novaDiscovery=typeof discoverNovaPoshtaReturns_==='function'?discoverNovaPoshtaReturns_():{skipped:true};
   const rows=readReturnRows_()
-    .filter(r=>(r.returnTtn||r.ttn)&&isReturnRecord_(r)&&(!r.supplierPickedUp||!r.supplierPickedUpAt||String(r.statusSource||'')==='SalesDrive'))
+    .filter(r=>(r.returnTtn||r.ttn)&&isReturnRecord_(r)&&!r.supplierPickedUp)
     .slice(0,100);
   let checked=0,updated=0,skipped=0,errors=0;
 
@@ -86,7 +86,6 @@ function trackNovaPoshta_(ttn,context){
   const delivered=/^(9|10|11)$/.test(statusCode)||/отриман|вручен|доставлен/i.test(status);
   const readyAtBranch=/прибув.{0,35}(відділен|пункт|поштомат)|готов.{0,25}(отриман|видач)|у\s+відділен/i.test(status);
   const arrived=isReturn&&(readyAtBranch||delivered);
-  const picked=isReturn&&delivered;
   const statusDate=firstValue_(item,['ActualDeliveryDate','RecipientDateTime','WarehouseRecipient','DateScan','ScheduledDeliveryDate']);
   const when=dateIso_(statusDate)||'';
 
@@ -98,7 +97,7 @@ function trackNovaPoshta_(ttn,context){
     isReturn:isReturn,
     returnStartedAt:isReturn?(context&&context.returnStartedAt?context.returnStartedAt:(when||new Date().toISOString())):'',
     arrivedAt:arrived?(when||new Date().toISOString()):'',
-    pickedUpAt:picked?(when||new Date().toISOString()):'',
+    carrierDelivered:Boolean(delivered),
     originalTtn:isEasyReturnLeg?lightReturnOriginal:(context&&context.originalTtn?canonicalTrackingNumber_(inferCarrierFromTrackingNumber_(context.originalTtn,context.carrier),context.originalTtn):''),
     returnTtn:isReturn?queried:'',
     raw:item
@@ -172,7 +171,7 @@ function trackUkrposhta_(ttn,context){
     isReturn:isReturn,
     returnStartedAt:returnEvent?dateIso_(returnEvent.date):(knownReturn?(context.returnStartedAt||''):''),
     arrivedAt:arrivedAt,
-    pickedUpAt:returnedAt,
+    carrierDelivered:Boolean(returnedEvent),
     originalTtn:canonicalTrackingNumber_('Укрпошта',context&&context.originalTtn?context.originalTtn:queried),
     returnTtn:isReturn?queried:'',
     raw:{latest:latest,history:history}
@@ -201,9 +200,8 @@ function trackTemplateProvider_(name,urlProperty,tokenProperty,ttn){
 function trackingResult_(source,status,statusCode,raw){
   const isReturn=looksLikeReturn_(status);
   const arrived=isReturn&&looksLikeReturnArrived_(status);
-  const picked=arrived&&/відправник|return\s+to\s+sender/i.test(String(status||''));
   const now=new Date().toISOString();
-  return {source:source,statusText:status,statusCode:statusCode,isReturn:isReturn,returnStartedAt:isReturn?now:'',arrivedAt:arrived?now:'',pickedUpAt:picked?now:'',raw:raw||{}};
+  return {source:source,statusText:status,statusCode:statusCode,isReturn:isReturn,returnStartedAt:isReturn?now:'',arrivedAt:arrived?now:'',carrierDelivered:arrived,raw:raw||{}};
 }
 
 function applyCarrierTracking_(row,tracking){
@@ -214,7 +212,6 @@ function applyCarrierTracking_(row,tracking){
   const authoritative=tracking.authoritative===true;
   const isReturn=Boolean(tracking.isReturn);
   const arrivedAt=tracking.arrivedAt||'';
-  const pickedUpAt=tracking.pickedUpAt||'';
   const originalTtn=tracking.originalTtn||current.originalTtn||current.ttn||'';
   const returnTtn=tracking.returnTtn||current.returnTtn||(isReturn?(tracking.ttn||current.ttn||''):'');
   const detectedCarrier=inferCarrierFromTrackingNumber_(returnTtn||tracking.ttn||current.ttn,tracking.source||current.carrier);
@@ -233,14 +230,7 @@ function applyCarrierTracking_(row,tracking){
     if(!merged.returnNumber) merged.returnNumber=generateReturnNumber_();
     merged.returnStartedAt=tracking.returnStartedAt||merged.returnStartedAt||'';
 
-    if(pickedUpAt){
-      merged.arrivedAt=arrivedAt||pickedUpAt;
-      merged.returnDate=merged.returnDate||arrivedAt||pickedUpAt;
-      merged.supplierPickedUp=true;
-      merged.supplierPickedUpAt=pickedUpAt;
-      merged.supplierPickupStatus='picked_up';
-      merged.returnStatus='completed';
-    }else if(arrivedAt){
+    if(arrivedAt){
       merged.arrivedAt=arrivedAt;
       merged.returnStatus='arrived';
       merged.supplierPickupStatus=current.supplierPickedUp?'picked_up':'waiting_pickup';
@@ -258,6 +248,8 @@ function applyCarrierTracking_(row,tracking){
     if(current.source==='salesdrive') merged.returnDate='';
   }
 
+  // Ніколи не змінюємо supplierPickedUp/supplierPickedUpAt із API перевізника.
+  // Це окреме ручне підтвердження, що постачальник фізично забрав товар.
   sh.getRange(row.rowNumber,1,1,RETURN_HEADERS.length).setValues([objectToRow_(normalizeReturnState_(merged,false))]);
   return merged;
 }
