@@ -1,12 +1,12 @@
 function discoverNovaPoshtaReturns_(){
+  const imageMirror=mirrorSalesDriveReturnImages_();
   const key=PropertiesService.getScriptProperties().getProperty('NOVA_POSHTA_API_KEY');
-  if(!key) return {ok:false,skipped:true,reason:'NOVA_POSHTA_API_KEY not set'};
+  if(!key) return {ok:false,skipped:true,reason:'NOVA_POSHTA_API_KEY not set',imagesMirrored:imageMirror.updated||0};
 
   const now=Date.now();
   const maxAgeMs=21*86400000;
   const rows=readReturnRows_().filter(row=>{
     if(String(row.source||'').toLowerCase()!=='salesdrive') return false;
-    if(row.supplierPickedUp) return false;
     const ttn=normalizeTrackingNumber_(row.originalTtn||row.ttn||'');
     if(!/^\d{14}$/.test(ttn)) return false;
     const date=parseDate_(row.orderDate||row.createdAt||row.updatedAt);
@@ -14,9 +14,9 @@ function discoverNovaPoshtaReturns_(){
   }).sort((a,b)=>{
     const ad=parseDate_(a.orderDate||a.createdAt),bd=parseDate_(b.orderDate||b.createdAt);
     return (bd?bd.getTime():0)-(ad?ad.getTime():0);
-  }).slice(0,140);
+  }).slice(0,180);
 
-  if(!rows.length) return {ok:true,checked:0,children:0,returnsFound:0,updated:0};
+  if(!rows.length) return {ok:true,checked:0,children:0,returnsFound:0,updated:0,imagesMirrored:imageMirror.updated||0};
 
   const parentNumbers=[];
   const seenParents=new Set();
@@ -45,23 +45,17 @@ function discoverNovaPoshtaReturns_(){
     const parent=parentByNumber.get(parentNumber);
     if(!parent) return;
 
-    const direct=novaStatusIsExplicitReturn_(parent);
     const childNumber=normalizeTrackingNumber_(firstValue_(parent,['LastCreatedOnTheBasisNumber','lastCreatedOnTheBasisNumber'])||'');
     const child=childNumber?childByNumber.get(childNumber):null;
     const relation=novaReturnRelation_(parent,child,parentNumber,childNumber);
+    const direct=novaStatusIsExplicitReturn_(parent);
 
+    // IMPORTANT: when Nova Poshta has created a separate EN on the basis of the
+    // original shipment, inspect that relation first. Status 102 on the original
+    // EN means refusal/return started; it does NOT mean that the original EN is
+    // the actual return EN and it certainly does not mean supplier pickup.
     if(relation==='redirection'){
       redirections++;
-      return;
-    }
-
-    if(direct){
-      const result=novaTrackingResultFromItem_(parent,parentNumber,row);
-      result.isReturn=true;
-      result.originalTtn=parentNumber;
-      result.returnTtn=parentNumber;
-      applyCarrierTracking_(row,result);
-      returnsFound++;updated++;
       return;
     }
 
@@ -70,10 +64,21 @@ function discoverNovaPoshtaReturns_(){
       result.isReturn=true;
       result.originalTtn=parentNumber;
       result.returnTtn=childNumber;
+      result.distinctReturnLeg=true;
       if(!result.returnStartedAt){
         result.returnStartedAt=dateIso_(firstValue_(parent,['LastCreatedOnTheBasisDateTime','lastCreatedOnTheBasisDateTime']))||row.returnStartedAt||new Date().toISOString();
       }
-      applyCarrierTracking_(row,result);
+      novaApplyDiscoveredReturn_(row,result);
+      returnsFound++;updated++;
+      return;
+    }
+
+    if(direct){
+      const result=novaTrackingResultFromItem_(parent,parentNumber,row);
+      result.isReturn=true;
+      result.originalTtn=parentNumber;
+      result.returnTtn=parentNumber;
+      novaApplyDiscoveredReturn_(row,result);
       returnsFound++;updated++;
       return;
     }
@@ -81,7 +86,102 @@ function discoverNovaPoshtaReturns_(){
     if(childNumber&&relation==='') ambiguous++;
   });
 
-  return {ok:true,checked:parentNumbers.length,children:childNumbers.length,returnsFound:returnsFound,updated:updated,redirections:redirections,ambiguous:ambiguous};
+  return {ok:true,checked:parentNumbers.length,children:childNumbers.length,returnsFound:returnsFound,updated:updated,redirections:redirections,ambiguous:ambiguous,imagesMirrored:imageMirror.updated||0,imageErrors:imageMirror.errors||0};
+}
+
+function novaApplyDiscoveredReturn_(row,result){
+  // Repair rows that an older version falsely marked as already picked up from
+  // the status of the ORIGINAL shipment. If Nova Poshta now proves that a
+  // distinct return EN exists and it has not yet been delivered back, the row
+  // must become active again and follow the child EN.
+  if(result&&result.distinctReturnLeg&&!result.pickedUpAt&&row&&row.id){
+    const fresh=findReturnByIdFast_(row.id);
+    if(fresh){
+      const oldReturn=normalizeTrackingNumber_(fresh.returnTtn||'');
+      const parent=normalizeTrackingNumber_(result.originalTtn||'');
+      const child=normalizeTrackingNumber_(result.returnTtn||'');
+      const staleParentReturn=!oldReturn||oldReturn===parent;
+      if(child&&parent&&child!==parent&&staleParentReturn&&fresh.supplierPickedUp){
+        fresh.supplierPickedUp=false;
+        fresh.supplierPickedUpAt='';
+        fresh.returnStatus='in_transit';
+        fresh.supplierPickupStatus='not_handed_over';
+        fresh.arrivedAt='';
+        fresh.returnTtn=child;
+        fresh.originalTtn=parent;
+        writeReturnFast_(fresh);
+      }
+    }
+  }
+  return applyCarrierTracking_(row,result);
+}
+
+function mirrorSalesDriveReturnImages_(){
+  let rows=[];
+  try{
+    rows=readReturnRows_().filter(row=>{
+      if(String(row.source||'').toLowerCase()!=='salesdrive'||!isReturnRecord_(row)) return false;
+      const url=String(row.productImage||'').trim();
+      if(!/^https?:\/\//i.test(url)) return false;
+      if(/drive\.google\.com|googleusercontent\.com/i.test(url)) return false;
+      return true;
+    }).slice(0,40);
+  }catch(_){ return {updated:0,errors:0}; }
+  if(!rows.length) return {updated:0,errors:0};
+
+  const cache=CacheService.getScriptCache();
+  const pending=[];
+  rows.forEach(row=>{
+    const url=String(row.productImage||'').trim();
+    const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.MD5,url,Utilities.Charset.UTF_8);
+    const cacheKey='RM_IMG_MIRROR_'+Utilities.base64EncodeWebSafe(digest).replace(/=+$/,'').slice(0,28);
+    if(cache.get(cacheKey)==='fail') return;
+    pending.push({row:row,url:url,cacheKey:cacheKey});
+  });
+  if(!pending.length) return {updated:0,errors:0};
+
+  const requests=pending.map(item=>({
+    url:item.url,
+    method:'get',
+    muteHttpExceptions:true,
+    followRedirects:true,
+    headers:{'User-Agent':'Mozilla/5.0','Accept':'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'}
+  }));
+
+  let responses=[];
+  try{responses=UrlFetchApp.fetchAll(requests);}catch(_){return {updated:0,errors:pending.length};}
+
+  const sh=returnSheetFast_();
+  const imageCol=RETURN_KEYS.indexOf('productImage')+1;
+  const folder=getReturnImagesFolder_();
+  let updated=0,errors=0;
+
+  responses.forEach((response,index)=>{
+    const item=pending[index];
+    try{
+      const http=response.getResponseCode();
+      if(http<200||http>=400) throw new Error('HTTP '+http);
+      const blob=response.getBlob();
+      const bytes=blob.getBytes();
+      if(!bytes.length||bytes.length>3*1024*1024) throw new Error('bad image size');
+      let mime=String(blob.getContentType()||response.getHeaders()['Content-Type']||'').split(';')[0].trim().toLowerCase();
+      if(!/^image\//.test(mime)) throw new Error('not image');
+      if(mime==='image/jpg') mime='image/jpeg';
+      const ext=mime==='image/png'?'png':(mime==='image/webp'?'webp':(mime==='image/gif'?'gif':'jpg'));
+      const safeId=String(item.row.salesDriveId||item.row.id||Utilities.getUuid()).replace(/[^a-zA-Z0-9_-]/g,'_');
+      blob.setName('salesdrive-'+safeId+'-'+Utilities.getUuid().slice(0,8)+'.'+ext);
+      const file=folder.createFile(blob);
+      try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(_){ }
+      const driveUrl='https://drive.google.com/uc?export=view&id='+file.getId();
+      sh.getRange(item.row.rowNumber,imageCol).setValue(driveUrl);
+      try{cache.put(item.cacheKey,'ok',21600);}catch(_){ }
+      updated++;
+    }catch(_){
+      errors++;
+      try{cache.put(item.cacheKey,'fail',3600);}catch(__){ }
+    }
+  });
+  return {updated:updated,errors:errors};
 }
 
 function novaPoshtaStatusBatch_(apiKey,numbers){
@@ -151,6 +251,10 @@ function novaReturnRelation_(parent,child,parentNumber,childNumber){
   if(redirectSignal&&!returnSignal) return 'redirection';
   if(returnSignal) return 'return';
 
+  // If the original shipment itself is already in an explicit refusal/return
+  // state (for example NP status 102) and Nova Poshta created a child EN on its
+  // basis, that child is the return leg unless the relation explicitly says
+  // that it is a redirection.
   if(novaStatusIsExplicitReturn_(parent)) return 'return';
   return '';
 }
