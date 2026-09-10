@@ -10,7 +10,11 @@ function buildDashboard_(){
     if(!picked&&row.supplierPickupStatus==='waiting_pickup') counts.pickup++;
     if(picked) counts.picked++;
     amount+=Number(row.amount||0);
-    row.daysWaiting=row.arrivedAt&&!picked?daysBetween_(row.arrivedAt,new Date()):0;
+
+    // "Днів очікування" рахуємо ТІЛЬКИ від фактичного прибуття
+    // повернення у точку видачі постачальнику. Дата замовлення, створення
+    // заявки або початку повернення тут не використовуються.
+    row.daysWaiting=validSupplierWaitingDays_(row);
   });
 
   rows.sort((a,b)=>{
@@ -29,6 +33,30 @@ function buildDashboard_(){
     setup:getSetupStatus_(),
     generatedAt:new Date().toISOString()
   };
+}
+
+function validSupplierWaitingDays_(row){
+  if(!row||row.supplierPickedUp||row.supplierPickupStatus!=='waiting_pickup') return 0;
+  const arrived=parseDate_(row.arrivedAt);
+  if(!arrived) return 0;
+
+  const now=new Date();
+  if(arrived.getTime()>now.getTime()) return 0;
+
+  // Захист від старих помилкових даних: якщо "дата прибуття" раніша
+  // за початок повернення, її не можна використовувати для лічильника.
+  const started=parseDate_(row.returnStartedAt);
+  if(started&&arrived.getTime()<started.getTime()) return 0;
+
+  // Ще один захист для старих SalesDrive-записів, де дата замовлення
+  // колись помилково могла потрапити в arrivedAt.
+  const orderDate=parseDate_(row.orderDate);
+  if(!started&&String(row.source||'').toLowerCase()==='salesdrive'&&orderDate){
+    const delta=Math.abs(arrived.getTime()-orderDate.getTime());
+    if(delta<36*60*60*1000) return 0;
+  }
+
+  return daysBetween_(arrived,now);
 }
 
 function looksLikeReturn_(status){
