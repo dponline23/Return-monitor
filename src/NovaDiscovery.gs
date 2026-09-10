@@ -50,10 +50,6 @@ function discoverNovaPoshtaReturns_(){
     const relation=novaReturnRelation_(parent,child,parentNumber,childNumber);
     const direct=novaStatusIsExplicitReturn_(parent);
 
-    // IMPORTANT: when Nova Poshta has created a separate EN on the basis of the
-    // original shipment, inspect that relation first. Status 102 on the original
-    // EN means refusal/return started; it does NOT mean that the original EN is
-    // the actual return EN and it certainly does not mean supplier pickup.
     if(relation==='redirection'){
       redirections++;
       return;
@@ -90,18 +86,20 @@ function discoverNovaPoshtaReturns_(){
 }
 
 function novaApplyDiscoveredReturn_(row,result){
-  // Repair rows that an older version falsely marked as already picked up from
-  // the status of the ORIGINAL shipment. If Nova Poshta now proves that a
-  // distinct return EN exists and it has not yet been delivered back, the row
-  // must become active again and follow the child EN.
-  if(result&&result.distinctReturnLeg&&!result.pickedUpAt&&row&&row.id){
+  // Old versions could mark the ORIGINAL outbound shipment as "supplier picked up"
+  // before the distinct 590... return EN was discovered. Repair only that stale
+  // case. Carrier delivery itself must NEVER set supplierPickedUp.
+  if(result&&result.distinctReturnLeg&&row&&row.id){
     const fresh=findReturnByIdFast_(row.id);
     if(fresh){
       const oldReturn=normalizeTrackingNumber_(fresh.returnTtn||'');
       const parent=normalizeTrackingNumber_(result.originalTtn||'');
       const child=normalizeTrackingNumber_(result.returnTtn||'');
       const staleParentReturn=!oldReturn||oldReturn===parent;
-      if(child&&parent&&child!==parent&&staleParentReturn&&fresh.supplierPickedUp){
+      const pickupAt=parseDate_(fresh.supplierPickedUpAt);
+      const returnStart=parseDate_(result.returnStartedAt||fresh.returnStartedAt);
+      const pickupPredatesReturn=Boolean(pickupAt&&returnStart&&pickupAt.getTime()<=returnStart.getTime());
+      if(child&&parent&&child!==parent&&staleParentReturn&&fresh.supplierPickedUp&&pickupPredatesReturn){
         fresh.supplierPickedUp=false;
         fresh.supplierPickedUpAt='';
         fresh.returnStatus='in_transit';
@@ -250,11 +248,6 @@ function novaReturnRelation_(parent,child,parentNumber,childNumber){
   const redirectSignal=/переадрес|redirect|змінен[оа]\s+адрес|змін[а-яіїєґ]*\s+адрес/i.test(relationText);
   if(redirectSignal&&!returnSignal) return 'redirection';
   if(returnSignal) return 'return';
-
-  // If the original shipment itself is already in an explicit refusal/return
-  // state (for example NP status 102) and Nova Poshta created a child EN on its
-  // basis, that child is the return leg unless the relation explicitly says
-  // that it is a redirection.
   if(novaStatusIsExplicitReturn_(parent)) return 'return';
   return '';
 }
@@ -286,7 +279,7 @@ function novaTrackingResultFromItem_(item,number,context){
     isReturn:true,
     returnStartedAt:(context&&context.returnStartedAt)||when||new Date().toISOString(),
     arrivedAt:(readyAtBranch||delivered)?(when||new Date().toISOString()):'',
-    pickedUpAt:delivered?(when||new Date().toISOString()):'',
+    carrierDelivered:Boolean(delivered),
     originalTtn:context&&context.originalTtn?normalizeTrackingNumber_(context.originalTtn):'',
     returnTtn:normalizeTrackingNumber_(number),
     raw:item
