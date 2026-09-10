@@ -2,7 +2,11 @@ function apiCarrierSettings(){
   const p=PropertiesService.getScriptProperties();
   return {
     novaPoshtaConfigured:Boolean(p.getProperty('NOVA_POSHTA_API_KEY')),
-    ukrposhtaConfigured:Boolean(p.getProperty('UKRPOSHTA_STATUS_BEARER_PROD')||p.getProperty('UKRPOSHTA_TRACKING_TOKEN'))
+    ukrposhtaConfigured:Boolean(
+      p.getProperty('UKRPOSHTA_STATUS_BEARER_PROD')||
+      p.getProperty('PRODUCTION BEARER StatusTracking')||
+      p.getProperty('UKRPOSHTA_TRACKING_TOKEN')
+    )
   };
 }
 
