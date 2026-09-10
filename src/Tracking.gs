@@ -60,7 +60,6 @@ function trackNovaPoshta_(ttn){
   const lightReturnOriginal=String(item.LightReturnNumber||'').trim();
   const explicitReturnText=/повернен|поверта|зворотн|відмов|return/i.test(status+' '+String(item.UndeliveryReasonsSubtypeDescription||''));
 
-  // For Easy Return the incoming return EW contains LightReturnNumber with the primary EW.
   const isEasyReturnLeg=Boolean(lightReturnOriginal&&lightReturnOriginal!==queried);
   const isReturn=isEasyReturnLeg||explicitReturnText;
   const delivered=/^(9|10|11)$/.test(statusCode)||/отриман|вручен|доставлен/i.test(status);
@@ -84,8 +83,12 @@ function trackNovaPoshta_(ttn){
 
 function trackUkrposhta_(ttn){
   const p=PropertiesService.getScriptProperties();
-  const token=cleanBearer_(p.getProperty('UKRPOSHTA_STATUS_BEARER_PROD')||p.getProperty('UKRPOSHTA_TRACKING_TOKEN')||'');
-  if(!token) return {skipped:true,source:'Укрпошта',reason:'UKRPOSHTA_STATUS_BEARER_PROD not set'};
+  const token=cleanBearer_(
+    p.getProperty('UKRPOSHTA_STATUS_BEARER_PROD')||
+    p.getProperty('PRODUCTION BEARER StatusTracking')||
+    p.getProperty('UKRPOSHTA_TRACKING_TOKEN')||''
+  );
+  if(!token) return {skipped:true,source:'Укрпошта',reason:'PRODUCTION BEARER StatusTracking not set'};
 
   const url='https://www.ukrposhta.ua/status-tracking/0.0.1/statuses?barcode='+encodeURIComponent(String(ttn));
   const response=UrlFetchApp.fetch(url,{
@@ -201,8 +204,6 @@ function applyCarrierTracking_(row,tracking){
       if(authoritative&&current.source==='salesdrive'&&current.statusSource==='SalesDrive') merged.returnDate=merged.returnStartedAt||'';
     }
   }else if(authoritative&&merged.returnNumber){
-    // SalesDrive may only say that a return is expected. Do not call an ordinary
-    // delivered/redirected outbound shipment an arrived return.
     merged.arrivedAt='';
     merged.returnStatus='expected';
     merged.supplierPickupStatus='not_handed_over';
