@@ -18,9 +18,7 @@ function doGet(){
 function include_(name){
   let content=HtmlService.createHtmlOutputFromFile(name).getContent();
   if(name==='Styles'){
-    // Repair the accidentally committed literal "\\n" sequences in the mobile CSS block.
     content=content.replace(/\\n/g,'\n');
-    // Final mobile overrides keep the header composition aligned with the approved reference.
     content += `<style>
 @media(max-width:760px){
   .dashboardHero{overflow:visible!important}
@@ -99,7 +97,7 @@ function getSetupStatus_(){
     salesDriveSubdomain:salesDriveState.subdomain||'',
     salesDriveLastSync:salesDriveState.lastSync||'',
     novaPoshta:Boolean(p.getProperty('NOVA_POSHTA_API_KEY')),
-    ukrposhta:Boolean(p.getProperty('UKRPOSHTA_TRACKING_URL_TEMPLATE')),
+    ukrposhta:Boolean(p.getProperty('UKRPOSHTA_STATUS_BEARER_PROD')||p.getProperty('UKRPOSHTA_TRACKING_TOKEN')),
     meest:Boolean(p.getProperty('MEEST_TRACKING_URL_TEMPLATE')),
     prom:Boolean(p.getProperty('PROM_API_TOKEN')),
     spreadsheetId:RETURN_MONITOR.spreadsheetId
@@ -109,6 +107,15 @@ function getSetupStatus_(){
 function syncAll(){
   ensureDatabase_();
   const started=new Date();
-  const result={ok:true,salesDrive:syncSalesDrive_(),tracking:refreshTracking_(),startedAt:started.toISOString(),finishedAt:new Date().toISOString()};
-  return result;
+  const salesDrive=syncSalesDrive_();
+  const reconcile=typeof reconcileReturnData_==='function'?reconcileReturnData_():{};
+  const tracking=refreshTracking_();
+  return {
+    ok:Boolean(!salesDrive||salesDrive.ok!==false)&&Boolean(!tracking||tracking.ok!==false),
+    salesDrive:salesDrive,
+    reconcile:reconcile,
+    tracking:tracking,
+    startedAt:started.toISOString(),
+    finishedAt:new Date().toISOString()
+  };
 }
