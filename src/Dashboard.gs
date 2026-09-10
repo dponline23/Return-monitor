@@ -32,7 +32,15 @@ function buildDashboard_(){
 }
 
 function looksLikeReturn_(status){
-  return /повер|відмов|не забра|відправник|переадрес/i.test(String(status||''));
+  const text=String(status||'').toLowerCase();
+  if(!text) return false;
+
+  // Customer-initiated redirection / address change is a normal delivery flow,
+  // not a refusal and not a parcel returning to the sender.
+  const redirectionOnly=/переадрес|змінен[оа]\s+адрес|змін[а-яіїєґ]*\s+адрес|redirect|address\s+chang/i.test(text);
+  const explicitReturn=/повер|відмов|не\s*забра|не\s*отрим|вручено\s+відправнику|отримано\s+відправником|повернуто\s+відправнику|return\s+to\s+sender/i.test(text);
+  if(redirectionOnly&&!explicitReturn) return false;
+  return explicitReturn;
 }
 
 function looksLikeReturnArrived_(status){
