@@ -1,8 +1,9 @@
 function reconcileReturnData_(){
   const dedupe=deduplicateShipmentRows_();
   const redirects=cleanupFalseRedirectionReturns_();
+  const rozetka=cleanupRozetkaRefusalOnlyReturns_();
   const legs=reconcileSalesDriveReturnLegs_();
-  return {dedupe:dedupe,redirects:redirects,legs:legs};
+  return {dedupe:dedupe,redirects:redirects,rozetka:rozetka,legs:legs};
 }
 
 function deduplicateShipmentRows_(){
@@ -50,23 +51,57 @@ function cleanupFalseRedirectionReturns_(){
     if(!isRedirection||looksLikeReturn_(evidence)) return;
     if(!row.returnNumber&&!row.returnStatus&&!row.returnStartedAt&&!row.returnTtn) return;
 
-    const clean=Object.assign({},row,{
-      returnNumber:'',
-      returnStatus:'',
-      supplierPickupStatus:'not_handed_over',
-      returnDate:'',
-      returnStartedAt:'',
-      arrivedAt:'',
-      returnTtn:'',
-      supplierNotified:false,
-      supplierNotifiedAt:'',
-      updatedAt:new Date().toISOString()
-    });
+    const clean=clearAutoReturnFields_(row);
     sh.getRange(row.rowNumber,1,1,RETURN_HEADERS.length).setValues([objectToRow_(normalizeReturnState_(clean,false))]);
     corrected++;
   });
 
   return {corrected:corrected};
+}
+
+function cleanupRozetkaRefusalOnlyReturns_(){
+  const sh=returnSheetFast_();
+  const rows=readReturnRows_();
+  let corrected=0;
+
+  rows.forEach(row=>{
+    if(String(row.source||'').toLowerCase()!=='salesdrive') return;
+    if(normalizeCarrierKey_(row.carrier)!=='rozetka') return;
+    if(row.supplierPickedUp||row.returnReason||row.supplierNotified) return;
+
+    const code=String(row.deliveryCode||'').replace(/\s+/g,'');
+    const text=[row.deliveryStatus,row.note].filter(Boolean).join(' · ').toLowerCase();
+
+    // 50011 / проста «Відмова» ще не доводить, що посилка вже пішла
+    // у зворотному потоці. У контроль додаємо Rozetka лише коли є
+    // статус фактичного повернення/очікування повернення (50020/60040)
+    // або явний текст «повертається/очікування повернення».
+    const reverseFlow=/^(50020|60040)$/.test(code)||/очікування\s+повернення|повертається|у\s+відділенні\s+повернення|повернуто/i.test(text);
+    const refusalOnly=code==='50011'||(/відмов/i.test(text)&&!reverseFlow);
+    if(!refusalOnly||reverseFlow) return;
+    if(!row.returnNumber&&!row.returnStatus&&!row.returnStartedAt&&!row.returnTtn) return;
+
+    const clean=clearAutoReturnFields_(row);
+    sh.getRange(row.rowNumber,1,1,RETURN_HEADERS.length).setValues([objectToRow_(normalizeReturnState_(clean,false))]);
+    corrected++;
+  });
+
+  return {corrected:corrected};
+}
+
+function clearAutoReturnFields_(row){
+  return Object.assign({},row,{
+    returnNumber:'',
+    returnStatus:'',
+    supplierPickupStatus:'not_handed_over',
+    returnDate:'',
+    returnStartedAt:'',
+    arrivedAt:'',
+    returnTtn:'',
+    supplierNotified:false,
+    supplierNotifiedAt:'',
+    updatedAt:new Date().toISOString()
+  });
 }
 
 function reconcileSalesDriveReturnLegs_(){
@@ -84,9 +119,6 @@ function reconcileSalesDriveReturnLegs_(){
   groups.forEach(group=>{
     if(group.length<2) return;
 
-    // A child TTN can also be a customer redirection. ParentTrackingNumber by
-    // itself is NOT evidence of a return. Require an explicit return/refusal
-    // signal from SalesDrive/carrier or a manually entered return reason.
     const children=group.filter(row=>{
       const t=normalizeTrackingNumber_(row.ttn);
       const parent=normalizeTrackingNumber_(row.originalTtn);
@@ -106,18 +138,7 @@ function reconcileSalesDriveReturnLegs_(){
 
     group.forEach(row=>{
       if(row.rowNumber===canonical.rowNumber||row.supplierPickedUp) return;
-      const clean=Object.assign({},row,{
-        returnNumber:'',
-        returnStatus:'',
-        supplierPickupStatus:'not_handed_over',
-        returnDate:'',
-        returnStartedAt:'',
-        arrivedAt:'',
-        returnTtn:'',
-        supplierNotified:false,
-        supplierNotifiedAt:'',
-        updatedAt:new Date().toISOString()
-      });
+      const clean=clearAutoReturnFields_(row);
       sh.getRange(row.rowNumber,1,1,RETURN_HEADERS.length).setValues([objectToRow_(clean)]);
       corrected++;
     });
