@@ -1,4 +1,5 @@
 function refreshTracking_(){
+  const novaDiscovery=typeof discoverNovaPoshtaReturns_==='function'?discoverNovaPoshtaReturns_():{skipped:true};
   const rows=readReturnRows_()
     .filter(r=>(r.returnTtn||r.ttn)&&isReturnRecord_(r)&&(!r.supplierPickedUp||!r.supplierPickedUpAt||String(r.statusSource||'')==='SalesDrive'))
     .slice(0,100);
@@ -23,20 +24,21 @@ function refreshTracking_(){
       console.error('Tracking error',row.returnTtn||row.ttn,error);
     }
   });
-  return {ok:errors===0,checked:checked,updated:updated,skipped:skipped,errors:errors};
+  return {ok:errors===0,checked:checked,updated:updated,skipped:skipped,errors:errors,novaDiscovery:novaDiscovery};
 }
 
 function inferCarrierFromTrackingNumber_(ttn,fallback){
   const n=normalizeTrackingNumber_(ttn).replace(/[^A-Z0-9]/g,'');
   if(/^\d{14}$/.test(n)) return 'Нова Пошта';
-  if(/^050\d{10}$/.test(n)||/^50\d{10}$/.test(n)) return 'Укрпошта';
+  if(/^0(?:42|50)\d{10}$/.test(n)||/^(?:42|50)\d{10}$/.test(n)) return 'Укрпошта';
+  if(/^PRM-/i.test(String(ttn||'').trim())||/^201\d+/i.test(n)) return 'Rozetka Delivery';
   return String(fallback||'').trim();
 }
 
 function canonicalTrackingNumber_(carrier,ttn){
   let n=normalizeTrackingNumber_(ttn);
   const c=normalizeCarrierKey_(carrier);
-  if(c==='ukr'&&/^50\d{10}$/.test(n)) n='0'+n;
+  if(c==='ukr'&&/^(?:42|50)\d{10}$/.test(n)) n='0'+n;
   return n;
 }
 
