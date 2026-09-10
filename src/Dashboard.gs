@@ -38,5 +38,10 @@ function looksLikeReturn_(status){
 function looksLikeReturnArrived_(status){
   const text=String(status||'').toLowerCase();
   if(!text) return false;
+
+  // Ukrposhta final return status is 41010. SalesDrive can expose the raw
+  // event/reason pair 41000 + 10 as the combined code 4100010.
+  if(/(^|\D)(41010|4100010|35500)(\D|$)/.test(text)) return true;
+
   return /повернен.{0,45}(отрим|видан)|отриман.{0,45}(відправник|повернен)|видан.{0,45}(відправник|повернен)|повернул.{0,45}(відправник|одержувач)|отримано відправником|вручено відправнику/.test(text);
 }
