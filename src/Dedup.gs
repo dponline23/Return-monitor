@@ -1,7 +1,8 @@
 function reconcileReturnData_(){
   const dedupe=deduplicateShipmentRows_();
+  const redirects=cleanupFalseRedirectionReturns_();
   const legs=reconcileSalesDriveReturnLegs_();
-  return {dedupe:dedupe,legs:legs};
+  return {dedupe:dedupe,redirects:redirects,legs:legs};
 }
 
 function deduplicateShipmentRows_(){
@@ -35,6 +36,39 @@ function deduplicateShipmentRows_(){
   return {removed:deleteRows.length,merged:mergedCount};
 }
 
+function cleanupFalseRedirectionReturns_(){
+  const sh=returnSheetFast_();
+  const rows=readReturnRows_();
+  let corrected=0;
+
+  rows.forEach(row=>{
+    if(String(row.source||'').toLowerCase()!=='salesdrive') return;
+    if(row.supplierPickedUp||row.returnReason) return;
+
+    const evidence=[row.deliveryStatus,row.note].filter(Boolean).join(' · ');
+    const isRedirection=/переадрес|змінен[оа]\s+адрес|змін[а-яіїєґ]*\s+адрес|redirect|address\s+chang/i.test(evidence);
+    if(!isRedirection||looksLikeReturn_(evidence)) return;
+    if(!row.returnNumber&&!row.returnStatus&&!row.returnStartedAt&&!row.returnTtn) return;
+
+    const clean=Object.assign({},row,{
+      returnNumber:'',
+      returnStatus:'',
+      supplierPickupStatus:'not_handed_over',
+      returnDate:'',
+      returnStartedAt:'',
+      arrivedAt:'',
+      returnTtn:'',
+      supplierNotified:false,
+      supplierNotifiedAt:'',
+      updatedAt:new Date().toISOString()
+    });
+    sh.getRange(row.rowNumber,1,1,RETURN_HEADERS.length).setValues([objectToRow_(normalizeReturnState_(clean,false))]);
+    corrected++;
+  });
+
+  return {corrected:corrected};
+}
+
 function reconcileSalesDriveReturnLegs_(){
   const sh=returnSheetFast_();
   const rows=readReturnRows_();
@@ -49,10 +83,15 @@ function reconcileSalesDriveReturnLegs_(){
   let corrected=0;
   groups.forEach(group=>{
     if(group.length<2) return;
+
+    // A child TTN can also be a customer redirection. ParentTrackingNumber by
+    // itself is NOT evidence of a return. Require an explicit return/refusal
+    // signal from SalesDrive/carrier or a manually entered return reason.
     const children=group.filter(row=>{
       const t=normalizeTrackingNumber_(row.ttn);
       const parent=normalizeTrackingNumber_(row.originalTtn);
-      return t&&parent&&t!==parent;
+      if(!t||!parent||t===parent) return false;
+      return rowHasExplicitReturnEvidence_(row);
     });
     if(!children.length) return;
 
@@ -84,6 +123,13 @@ function reconcileSalesDriveReturnLegs_(){
     });
   });
   return {corrected:corrected};
+}
+
+function rowHasExplicitReturnEvidence_(row){
+  if(!row) return false;
+  if(row.returnReason||row.supplierPickedUp) return true;
+  const evidence=[row.deliveryStatus,row.note].filter(Boolean).join(' · ');
+  return looksLikeReturn_(evidence)||looksLikeReturnArrived_(evidence);
 }
 
 function mergeReturnAnnotations_(target,source){
