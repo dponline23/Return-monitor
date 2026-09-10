@@ -1,17 +1,20 @@
 function refreshTracking_(){
-  const rows=readReturnRows_().filter(r=>(r.returnTtn||r.ttn)&&!r.supplierPickedUp&&isReturnRecord_(r)).slice(0,80);
+  const rows=readReturnRows_()
+    .filter(r=>(r.returnTtn||r.ttn)&&!r.supplierPickedUp&&isReturnRecord_(r))
+    .slice(0,100);
   let checked=0,updated=0,skipped=0,errors=0;
 
   rows.forEach(row=>{
     try{
-      const trackingTtn=row.returnTtn||row.ttn;
+      const trackingTtn=String(row.returnTtn||row.ttn||'').trim();
+      if(!trackingTtn){ skipped++; return; }
       const result=trackShipment_(row.carrier,trackingTtn);
       if(!result||result.skipped){ skipped++; return; }
       result.ttn=trackingTtn;
-      result.originalTtn=row.originalTtn||row.ttn||'';
-      result.returnTtn=row.returnTtn||trackingTtn;
+      result.originalTtn=result.originalTtn||row.originalTtn||row.ttn||'';
+      result.returnTtn=result.returnTtn||row.returnTtn||(result.isReturn?trackingTtn:'');
       checked++;
-      updateTrackingRow_(row,result);
+      applyCarrierTracking_(row,result);
       updated++;
     }catch(error){
       errors++;
@@ -24,7 +27,7 @@ function refreshTracking_(){
 function trackShipment_(carrier,ttn){
   const c=String(carrier||'').toLowerCase();
   if(/нова|novaposhta|nova post/.test(c)) return trackNovaPoshta_(ttn);
-  if(/укр|ukrposhta/.test(c)) return trackTemplateProvider_('Укрпошта','UKRPOSHTA_TRACKING_URL_TEMPLATE','UKRPOSHTA_TRACKING_TOKEN',ttn);
+  if(/укр|ukrposhta/.test(c)) return trackUkrposhta_(ttn);
   if(/meest|міст/.test(c)) return trackTemplateProvider_('Meest','MEEST_TRACKING_URL_TEMPLATE','MEEST_TRACKING_TOKEN',ttn);
   if(/rozetka|розетка/.test(c)) return {skipped:true,source:'Rozetka',reason:'Rozetka tracking adapter pending'};
   return {skipped:true,source:carrier||'Unknown',reason:'Unknown carrier'};
@@ -33,12 +36,111 @@ function trackShipment_(carrier,ttn){
 function trackNovaPoshta_(ttn){
   const key=PropertiesService.getScriptProperties().getProperty('NOVA_POSHTA_API_KEY');
   if(!key) return {skipped:true,source:'Нова Пошта',reason:'NOVA_POSHTA_API_KEY not set'};
-  const payload={apiKey:key,modelName:'TrackingDocument',calledMethod:'getStatusDocuments',methodProperties:{Documents:[{DocumentNumber:String(ttn),Phone:''}]}};
-  const response=UrlFetchApp.fetch('https://api.novaposhta.ua/v2.0/json/',{method:'post',contentType:'application/json',payload:JSON.stringify(payload),muteHttpExceptions:true});
+
+  const payload={
+    apiKey:key,
+    modelName:'TrackingDocument',
+    calledMethod:'getStatusDocuments',
+    methodProperties:{Documents:[{DocumentNumber:String(ttn),Phone:''}]}
+  };
+  const response=UrlFetchApp.fetch('https://api.novaposhta.ua/v2.0/json/',{
+    method:'post',contentType:'application/json',payload:JSON.stringify(payload),muteHttpExceptions:true
+  });
+  const code=response.getResponseCode();
   const json=JSON.parse(response.getContentText()||'{}');
+  if(code<200||code>=300||json.success===false){
+    const errors=Array.isArray(json.errors)?json.errors.join('; '):('HTTP '+code);
+    throw new Error('Нова Пошта API: '+errors);
+  }
+
   const item=json&&json.data&&json.data[0]?json.data[0]:{};
-  const status=String(item.Status||item.StatusDescription||'');
-  return trackingResult_('Нова Пошта',status,String(item.StatusCode||''),item);
+  const status=compactText_(item.Status||item.StatusDescription||'');
+  const statusCode=String(item.StatusCode===undefined||item.StatusCode===null?'':item.StatusCode);
+  const queried=String(ttn||'').trim();
+  const lightReturnOriginal=String(item.LightReturnNumber||'').trim();
+  const explicitReturnText=/повернен|поверта|зворотн|відмов|return/i.test(status+' '+String(item.UndeliveryReasonsSubtypeDescription||''));
+
+  // For Easy Return the incoming return EW contains LightReturnNumber with the primary EW.
+  const isEasyReturnLeg=Boolean(lightReturnOriginal&&lightReturnOriginal!==queried);
+  const isReturn=isEasyReturnLeg||explicitReturnText;
+  const delivered=/^(9|10|11)$/.test(statusCode)||/отриман|вручен|доставлен/i.test(status);
+  const arrived=isReturn&&delivered;
+  const statusDate=firstValue_(item,['ActualDeliveryDate','RecipientDateTime','WarehouseRecipient','DateScan','ScheduledDeliveryDate']);
+  const when=dateIso_(statusDate)||'';
+
+  return {
+    source:'Нова Пошта',
+    authoritative:true,
+    statusText:status||(statusCode?'Нова Пошта · код '+statusCode:''),
+    statusCode:statusCode,
+    isReturn:isReturn,
+    returnStartedAt:isReturn?(when||new Date().toISOString()):'',
+    arrivedAt:arrived?(when||new Date().toISOString()):'',
+    originalTtn:isEasyReturnLeg?lightReturnOriginal:'',
+    returnTtn:isEasyReturnLeg?queried:'',
+    raw:item
+  };
+}
+
+function trackUkrposhta_(ttn){
+  const p=PropertiesService.getScriptProperties();
+  const token=cleanBearer_(p.getProperty('UKRPOSHTA_STATUS_BEARER_PROD')||p.getProperty('UKRPOSHTA_TRACKING_TOKEN')||'');
+  if(!token) return {skipped:true,source:'Укрпошта',reason:'UKRPOSHTA_STATUS_BEARER_PROD not set'};
+
+  const url='https://www.ukrposhta.ua/status-tracking/0.0.1/statuses?barcode='+encodeURIComponent(String(ttn));
+  const response=UrlFetchApp.fetch(url,{
+    method:'get',
+    muteHttpExceptions:true,
+    headers:{Accept:'application/json',Authorization:'Bearer '+token}
+  });
+  const httpCode=response.getResponseCode();
+  const text=response.getContentText('UTF-8');
+  let json=null;
+  try{json=JSON.parse(text||'[]');}catch(_){json=null;}
+  if(httpCode===401||httpCode===403) throw new Error('Укрпошта StatusTracking: перевірте PRODUCTION BEARER StatusTracking.');
+  if(httpCode<200||httpCode>=300) throw new Error('Укрпошта StatusTracking HTTP '+httpCode+': '+String(text||'').slice(0,180));
+
+  let history=[];
+  if(Array.isArray(json)) history=json;
+  else if(json&&Array.isArray(json.data)) history=json.data;
+  else if(json&&json.barcode) history=[json];
+  if(!history.length) return {skipped:true,source:'Укрпошта',reason:'Shipment not found'};
+
+  history=history.slice().sort((a,b)=>{
+    const ad=parseDate_(a&&a.date),bd=parseDate_(b&&b.date);
+    if(ad&&bd&&ad.getTime()!==bd.getTime()) return ad-bd;
+    return Number(a&&a.step||0)-Number(b&&b.step||0);
+  });
+
+  const returnEvent=history.find(item=>String(item&&item.event||'').replace(/\s/g,'')==='31200');
+  const returnedEvent=history.slice().reverse().find(item=>{
+    const event=String(item&&item.event||'').replace(/\s/g,'');
+    const reason=String(item&&item.eventReason_id||'').replace(/\s/g,'');
+    return (event==='41000'&&reason==='10')||event==='35500';
+  });
+  const latest=history[history.length-1]||{};
+  const latestEvent=String(latest.event||'').replace(/\s/g,'');
+  const latestReason=String(latest.eventReason_id||'').replace(/\s/g,'');
+  const effectiveCode=(latestEvent==='41000'&&latestReason==='10')?'41010':latestEvent;
+  const statusText=[compactText_(latest.eventName||''),compactText_(latest.eventReason||'')]
+    .filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
+
+  return {
+    source:'Укрпошта',
+    authoritative:true,
+    statusText:statusText||(effectiveCode?'Укрпошта · код '+effectiveCode:''),
+    statusCode:effectiveCode,
+    isReturn:Boolean(returnEvent||returnedEvent),
+    returnStartedAt:returnEvent?dateIso_(returnEvent.date):'',
+    arrivedAt:returnedEvent?dateIso_(returnedEvent.date):'',
+    originalTtn:String(ttn||''),
+    returnTtn:Boolean(returnEvent||returnedEvent)?String(ttn||''):'',
+    raw:{latest:latest,history:history}
+  };
+}
+
+function cleanBearer_(value){
+  return String(value||'').trim().replace(/^Bearer\s+/i,'').trim();
 }
 
 function trackTemplateProvider_(name,urlProperty,tokenProperty,ttn){
@@ -58,7 +160,55 @@ function trackTemplateProvider_(name,urlProperty,tokenProperty,ttn){
 
 function trackingResult_(source,status,statusCode,raw){
   const isReturn=looksLikeReturn_(status);
-  const arrived=looksLikeReturnArrived_(status);
+  const arrived=isReturn&&looksLikeReturnArrived_(status);
   const now=new Date().toISOString();
   return {source:source,statusText:status,statusCode:statusCode,isReturn:isReturn,returnStartedAt:isReturn?now:'',arrivedAt:arrived?now:'',raw:raw||{}};
+}
+
+function applyCarrierTracking_(row,tracking){
+  const sh=returnSheetFast_();
+  const raw=sh.getRange(row.rowNumber,1,1,RETURN_HEADERS.length).getValues()[0];
+  const current=rowToObject_(raw,row.rowNumber);
+  if(current.supplierPickedUp) return current;
+
+  const authoritative=tracking.authoritative===true;
+  const isReturn=Boolean(tracking.isReturn);
+  const arrivedAt=tracking.arrivedAt||'';
+  const originalTtn=tracking.originalTtn||current.originalTtn||current.ttn||'';
+  const returnTtn=tracking.returnTtn||current.returnTtn||(isReturn?(tracking.ttn||current.ttn||''):'');
+
+  const merged=Object.assign({},current,{
+    deliveryStatus:tracking.statusText||current.deliveryStatus,
+    deliveryCode:tracking.statusCode||current.deliveryCode,
+    statusSource:tracking.source||current.statusSource,
+    originalTtn:originalTtn,
+    returnTtn:returnTtn,
+    updatedAt:new Date().toISOString()
+  });
+
+  if(isReturn){
+    if(!merged.returnNumber) merged.returnNumber=generateReturnNumber_();
+    merged.returnStartedAt=tracking.returnStartedAt||merged.returnStartedAt||'';
+    if(arrivedAt){
+      merged.arrivedAt=arrivedAt;
+      merged.returnStatus='arrived';
+      merged.supplierPickupStatus='waiting_pickup';
+      merged.returnDate=merged.returnDate||arrivedAt;
+    }else{
+      merged.arrivedAt='';
+      merged.returnStatus='in_transit';
+      merged.supplierPickupStatus='not_handed_over';
+      if(authoritative&&current.source==='salesdrive'&&current.statusSource==='SalesDrive') merged.returnDate=merged.returnStartedAt||'';
+    }
+  }else if(authoritative&&merged.returnNumber){
+    // SalesDrive may only say that a return is expected. Do not call an ordinary
+    // delivered/redirected outbound shipment an arrived return.
+    merged.arrivedAt='';
+    merged.returnStatus='expected';
+    merged.supplierPickupStatus='not_handed_over';
+    if(current.source==='salesdrive') merged.returnDate='';
+  }
+
+  sh.getRange(row.rowNumber,1,1,RETURN_HEADERS.length).setValues([objectToRow_(normalizeReturnState_(merged,false))]);
+  return merged;
 }
