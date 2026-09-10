@@ -1,6 +1,6 @@
 function refreshTracking_(){
   const rows=readReturnRows_()
-    .filter(r=>(r.returnTtn||r.ttn)&&!r.supplierPickedUp&&isReturnRecord_(r))
+    .filter(r=>(r.returnTtn||r.ttn)&&isReturnRecord_(r)&&(!r.supplierPickedUp||!r.supplierPickedUpAt||String(r.statusSource||'')==='SalesDrive'))
     .slice(0,100);
   let checked=0,updated=0,skipped=0,errors=0;
 
@@ -75,6 +75,7 @@ function trackNovaPoshta_(ttn){
     isReturn:isReturn,
     returnStartedAt:isReturn?(when||new Date().toISOString()):'',
     arrivedAt:arrived?(when||new Date().toISOString()):'',
+    pickedUpAt:arrived?(when||new Date().toISOString()):'',
     originalTtn:isEasyReturnLeg?lightReturnOriginal:'',
     returnTtn:isEasyReturnLeg?queried:'',
     raw:item
@@ -127,6 +128,7 @@ function trackUkrposhta_(ttn){
   const effectiveCode=(latestEvent==='41000'&&latestReason==='10')?'41010':latestEvent;
   const statusText=[compactText_(latest.eventName||''),compactText_(latest.eventReason||'')]
     .filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
+  const returnedAt=returnedEvent?dateIso_(returnedEvent.date):'';
 
   return {
     source:'Укрпошта',
@@ -135,7 +137,8 @@ function trackUkrposhta_(ttn){
     statusCode:effectiveCode,
     isReturn:Boolean(returnEvent||returnedEvent),
     returnStartedAt:returnEvent?dateIso_(returnEvent.date):'',
-    arrivedAt:returnedEvent?dateIso_(returnedEvent.date):'',
+    arrivedAt:returnedAt,
+    pickedUpAt:returnedAt,
     originalTtn:String(ttn||''),
     returnTtn:Boolean(returnEvent||returnedEvent)?String(ttn||''):'',
     raw:{latest:latest,history:history}
@@ -164,19 +167,20 @@ function trackTemplateProvider_(name,urlProperty,tokenProperty,ttn){
 function trackingResult_(source,status,statusCode,raw){
   const isReturn=looksLikeReturn_(status);
   const arrived=isReturn&&looksLikeReturnArrived_(status);
+  const picked=arrived&&/відправник|return\s+to\s+sender/i.test(String(status||''));
   const now=new Date().toISOString();
-  return {source:source,statusText:status,statusCode:statusCode,isReturn:isReturn,returnStartedAt:isReturn?now:'',arrivedAt:arrived?now:'',raw:raw||{}};
+  return {source:source,statusText:status,statusCode:statusCode,isReturn:isReturn,returnStartedAt:isReturn?now:'',arrivedAt:arrived?now:'',pickedUpAt:picked?now:'',raw:raw||{}};
 }
 
 function applyCarrierTracking_(row,tracking){
   const sh=returnSheetFast_();
   const raw=sh.getRange(row.rowNumber,1,1,RETURN_HEADERS.length).getValues()[0];
   const current=rowToObject_(raw,row.rowNumber);
-  if(current.supplierPickedUp) return current;
 
   const authoritative=tracking.authoritative===true;
   const isReturn=Boolean(tracking.isReturn);
   const arrivedAt=tracking.arrivedAt||'';
+  const pickedUpAt=tracking.pickedUpAt||'';
   const originalTtn=tracking.originalTtn||current.originalTtn||current.ttn||'';
   const returnTtn=tracking.returnTtn||current.returnTtn||(isReturn?(tracking.ttn||current.ttn||''):'');
 
@@ -192,18 +196,26 @@ function applyCarrierTracking_(row,tracking){
   if(isReturn){
     if(!merged.returnNumber) merged.returnNumber=generateReturnNumber_();
     merged.returnStartedAt=tracking.returnStartedAt||merged.returnStartedAt||'';
-    if(arrivedAt){
+
+    if(pickedUpAt){
+      merged.arrivedAt=arrivedAt||pickedUpAt;
+      merged.returnDate=merged.returnDate||arrivedAt||pickedUpAt;
+      merged.supplierPickedUp=true;
+      merged.supplierPickedUpAt=pickedUpAt;
+      merged.supplierPickupStatus='picked_up';
+      merged.returnStatus='completed';
+    }else if(arrivedAt){
       merged.arrivedAt=arrivedAt;
       merged.returnStatus='arrived';
-      merged.supplierPickupStatus='waiting_pickup';
+      merged.supplierPickupStatus=current.supplierPickedUp?'picked_up':'waiting_pickup';
       merged.returnDate=merged.returnDate||arrivedAt;
-    }else{
+    }else if(!current.supplierPickedUp){
       merged.arrivedAt='';
       merged.returnStatus='in_transit';
       merged.supplierPickupStatus='not_handed_over';
       if(authoritative&&current.source==='salesdrive'&&current.statusSource==='SalesDrive') merged.returnDate=merged.returnStartedAt||'';
     }
-  }else if(authoritative&&merged.returnNumber){
+  }else if(authoritative&&merged.returnNumber&&!current.supplierPickedUp){
     merged.arrivedAt='';
     merged.returnStatus='expected';
     merged.supplierPickupStatus='not_handed_over';
