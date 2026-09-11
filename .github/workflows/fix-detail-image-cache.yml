@@ -1,0 +1,152 @@
+name: Fix detail image from loaded list copy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-detail-image-cache.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch detail image cache handoff
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('src/Index.html')
+          s=path.read_text(encoding='utf-8')
+
+          old_open="function openDetails(id){selectedId=id;renderRows();renderDetails();document.getElementById('drawerBackdrop').classList.add('open');const drawer=document.getElementById('detailsDrawer');drawer.classList.add('open');drawer.setAttribute('aria-hidden','false');}"
+          new_open=r'''function openDetails(id){
+            const row=(model.rows||[]).find(item=>item.id===id);
+            window.__detailImageCachedSrc='';
+            if(row&&row.productImage){
+              const raw=String(row.productImage||'').trim();
+              const loaded=Array.from(document.querySelectorAll('img[data-original]')).find(function(img){
+                return String(img.dataset.original||'').trim()===raw && img.complete && img.naturalWidth>0;
+              });
+              if(loaded) window.__detailImageCachedSrc=loaded.currentSrc||loaded.src||'';
+            }
+            selectedId=id;
+            renderDetails();
+            document.getElementById('drawerBackdrop').classList.add('open');
+            const drawer=document.getElementById('detailsDrawer');
+            drawer.classList.add('open');
+            drawer.setAttribute('aria-hidden','false');
+            renderRows();
+          }'''
+          if old_open not in s:
+            raise SystemExit('openDetails source pattern not found')
+          s=s.replace(old_open,new_open,1)
+
+          start=s.index('function hydrateDetailProductImage(imageUrl){')
+          end=s.index('function mobileCardHtml(row){',start)
+          new_hydrate=r'''function hydrateDetailProductImage(imageUrl){
+            const shell=document.getElementById('detailProductImageShell');
+            const raw=String(imageUrl||'').trim();
+            if(!shell||!raw)return;
+
+            function placeholder(){
+              if(!shell||!shell.isConnected)return;
+              shell.classList.remove('loading');
+              shell.innerHTML='<div class="detailImagePlaceholder">▧</div>';
+            }
+            function show(src,onFail){
+              if(!src){ if(onFail)onFail(); else placeholder(); return; }
+              const img=document.createElement('img');
+              img.className='detailProductImage';
+              img.alt='';
+              img.decoding='async';
+              img.onload=function(){ if(shell&&shell.isConnected)shell.classList.remove('loading'); };
+              img.onerror=function(){ if(onFail)onFail(); else placeholder(); };
+              img.src=src;
+              shell.replaceChildren(img);
+            }
+
+            const cached=String(window.__detailImageCachedSrc||'').trim();
+            window.__detailImageCachedSrc='';
+            if(cached){
+              show(cached,placeholder);
+              return;
+            }
+
+            const existing=Array.from(document.querySelectorAll('img[data-original]')).find(function(img){
+              return String(img.dataset.original||'').trim()===raw && img.complete && img.naturalWidth>0;
+            });
+            if(existing){
+              show(existing.currentSrc||existing.src,placeholder);
+              return;
+            }
+
+            let serverTried=false;
+            function serverFallback(){
+              if(serverTried){ placeholder(); return; }
+              serverTried=true;
+              google.script.run
+                .withSuccessHandler(function(dataUrl){
+                  if(dataUrl) show(dataUrl,placeholder);
+                  else placeholder();
+                })
+                .withFailureHandler(placeholder)
+                .apiGetProductImageData(raw);
+            }
+
+            const direct=directProductImageUrl(raw);
+            shell.classList.add('loading');
+            show(direct,serverFallback);
+          }
+          '''
+          s=s[:start]+new_hydrate+s[end:]
+          path.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Validate JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('src/Index.html').read_text(encoding='utf-8')
+          a=s.find('<script>'); b=s.rfind('</script>')
+          if a<0 or b<=a: raise SystemExit('script block not found')
+          Path('/tmp/index.js').write_text(s[a+8:b],encoding='utf-8')
+          PY
+          node --check /tmp/index.js
+
+      - name: Commit source fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/Index.html
+          git commit -m "Reuse loaded product image in return details"
+          git push
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install clasp
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Configure Google authorization
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          test -n "$CLASPRC_JSON" || (echo "Missing CLASPRC_JSON" && exit 1)
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+          npm run clasp:config
+
+      - name: Push Apps Script and update web app
+        env:
+          RETURN_MONITOR_DEPLOYMENT_ID: ${{ vars.RETURN_MONITOR_DEPLOYMENT_ID }}
+        run: node scripts/deploy.cjs
+
+      - name: Cleanup auth
+        if: always()
+        run: rm -f "$HOME/.clasprc.json" .clasp.json
