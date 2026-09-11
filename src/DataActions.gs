@@ -290,3 +290,24 @@ function getReturnImagesFolder_(){
   p.setProperty(key,folder.getId());
   return folder;
 }
+
+
+// PRODUCT_IMAGE_FALLBACK_V1
+function apiGetProductImageData(imageUrl){
+  const raw=String(imageUrl||'').trim();
+  if(!raw) return '';
+  let m=raw.match(/[?&]id=([A-Za-z0-9_-]{10,})/i);
+  if(!m) m=raw.match(/\/d\/([A-Za-z0-9_-]{10,})/i);
+  if(!m) return '';
+  try{
+    const file=DriveApp.getFileById(m[1]);
+    let blob=null;
+    try{ blob=file.getThumbnail(); }catch(_){ }
+    if(!blob) blob=file.getBlob();
+    const bytes=blob.getBytes();
+    if(bytes.length>4*1024*1024) return '';
+    return 'data:'+String(blob.getContentType()||'image/jpeg')+';base64,'+Utilities.base64Encode(bytes);
+  }catch(_){
+    return '';
+  }
+}

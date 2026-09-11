@@ -183,51 +183,61 @@ function renderRows(){
   document.getElementById('listFooter').textContent=rows.length?'Показано '+rows.length+' '+plural(rows.length,'повернення','повернення','повернень'):'';
 }
 function desktopRowHtml(row){const reason=reasonLabel(row.returnReason,row.returnReasonComment),product=productMini(row),order=orderLink(row),pickup=pickupCell(row);return `<div class="tableRow dataRow ${selectedId===row.id?'selected':''}" onclick="openDetails('${jsq(row.id)}')"><div class="checkCell" onclick="event.stopPropagation()"><input type="checkbox"></div><div><strong>${esc(row.returnNumber||'—')}</strong><div class="cellMeta">${esc(sourceLabel(row.source))}</div></div><div>${order}</div><div><strong>${esc(row.supplierName||'—')}</strong>${row.supplierNotified?`<div class="cellMeta">✓ Сповіщено</div>`:''}</div><div>${product}</div><div><span class="reasonPill">${esc(reason||'—')}</span></div><div>${statusBadge(row.returnStatus)}</div><div>${pickup}</div><div class="right moneyCell">${money(row.amount)}</div><div>${dateCell(row.returnDate||row.arrivedAt||row.returnStartedAt)}</div><div class="actionsCell" onclick="event.stopPropagation()"><button class="dotsBtn" type="button" onclick="openDetails('${jsq(row.id)}')">•••</button></div></div>`;}
+function compactReturnNumber(value){
+  const raw=String(value||'').trim();
+  const m=raw.match(/^RTN-\d{4}-(\d+)$/i);
+  return m?('RTN-'+String(Number(m[1]))):(raw||'—');
+}
+function driveImageId(value){
+  const raw=String(value||'').trim();
+  if(!raw)return '';
+  let m=raw.match(/[?&]id=([A-Za-z0-9_-]{10,})/i);
+  if(!m)m=raw.match(/\/d\/([A-Za-z0-9_-]{10,})/i);
+  return m?m[1]:'';
+}
+function directProductImageUrl(value){
+  const raw=String(value||'').trim();
+  if(!raw||/^data:image\//i.test(raw))return raw;
+  const id=driveImageId(raw);
+  return id?('https://lh3.googleusercontent.com/d/'+encodeURIComponent(id)+'=w480'):raw;
+}
+function productImageTag(value,className){
+  const raw=String(value||'').trim();
+  if(!raw)return '';
+  const src=directProductImageUrl(raw);
+  const cls=className?' class="'+attr(className)+'"':'';
+  return '<img'+cls+' src="'+attr(src)+'" data-original="'+attr(raw)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="retryProductImage(this)">';
+}
+function retryProductImage(img){
+  if(!img||img.dataset.proxyAttempted==='1')return;
+  img.dataset.proxyAttempted='1';
+  const original=img.dataset.original||'';
+  if(!original){img.style.display='none';return;}
+  google.script.run
+    .withSuccessHandler(function(dataUrl){
+      if(dataUrl){img.onerror=null;img.src=dataUrl;}
+      else{img.style.display='none';}
+    })
+    .withFailureHandler(function(){img.style.display='none';})
+    .apiGetProductImageData(original);
+}
 function mobileCardHtml(row){
-  const supplierName=row.supplierName||'Постачальник не вказаний';
-  const notified=row.supplierNotified?'<span class="mobileReturnNotified">✓ сповіщено</span>':'';
-  const orderNumber=row.supplierOrderNumber?('#'+esc(row.supplierOrderNumber)):'—';
-  const orderHtml=row.supplierOrderUrl
-    ?`<a class="mobileReturnOrder" href="${attr(row.supplierOrderUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${orderNumber}</a>`
-    :`<span class="mobileReturnOrder">${orderNumber}</span>`;
-  const image=row.productImage
-    ?`<img src="${attr(row.productImage)}" alt="" onerror="this.remove()">`
-    :'<span class="mobileReturnImagePlaceholder">▧</span>';
-  return `<article class="returnCard mobileReturnCard" onclick="openDetails('${jsq(row.id)}')">
-    <div class="mobileReturnHeader">
-      <div class="mobileReturnIdentity">
-        <div class="mobileReturnLine">
-          <span class="mobileReturnIcon mobileReturnDocIcon">▤</span>
-          <strong class="mobileReturnNumber">${esc(row.returnNumber||'—')}</strong>
-        </div>
-        <div class="mobileReturnLine mobileReturnSupplierLine">
-          <span class="mobileReturnIcon mobileReturnShopIcon">⌂</span>
-          <div class="mobileReturnSupplierWrap"><strong class="mobileReturnSupplier">${esc(supplierName)}</strong>${notified}</div>
-        </div>
-        <div class="mobileReturnOrderLine">${orderHtml}</div>
-      </div>
-      <div class="mobileReturnAmount">${money(row.amount)}</div>
+  const image=row.productImage?productImageTag(row.productImage,'compactCardPhoto'):'<span class="compactCardPhoto compactCardPlaceholder">▧</span>';
+  const supplier=esc(row.supplierName||'Постачальник не вказаний');
+  const notified=row.supplierNotified?'<span class="compactNotified" title="Постачальника сповіщено">✓</span>':'';
+  return `<article class="returnCard compactCardV2" onclick="openDetails('${jsq(row.id)}')">
+    <div class="compactCardHead">
+      <div class="compactCardIdentity"><strong class="compactCardRtn">${esc(compactReturnNumber(row.returnNumber))}</strong><span class="compactCardSupplier">${supplier}</span>${notified}</div>
+      <strong class="compactCardAmount">${money(row.amount)}</strong>
     </div>
-
-    <div class="mobileReturnDivider"></div>
-
-    <div class="mobileReturnProduct">
-      <div class="mobileReturnImage">${image}</div>
-      <div class="mobileReturnProductName">${esc(row.productName||'Товар не вказано')}</div>
-    </div>
-
-    <div class="mobileReturnBadges">
-      <span class="reasonPill mobileReturnReason">${esc(reasonLabel(row.returnReason,row.returnReasonComment)||'Причина не вказана')}</span>
-      ${statusBadge(row.returnStatus)}
-      ${pickupBadge(row.supplierPickupStatus)}
-    </div>
-
-    <div class="mobileReturnDate"><span class="mobileReturnClock">◷</span><span>${fmtDateTimeShort(row.returnDate||row.arrivedAt||row.returnStartedAt)}</span></div>
+    ${(row.productName||row.productImage)?`<div class="compactCardProduct">${image}<div class="compactCardProductName">${esc(row.productName||'Товар')}</div></div>`:''}
+    <div class="compactCardBadges"><span class="reasonPill">${esc(reasonLabel(row.returnReason,row.returnReasonComment)||'Причина не вказана')}</span>${statusBadge(row.returnStatus)}${pickupBadge(row.supplierPickupStatus)}</div>
+    <div class="compactCardDate"><span>◷</span><span>${fmtDateTimeShort(row.returnDate||row.arrivedAt||row.returnStartedAt)}</span></div>
   </article>`;
 }
 function emptyStateHtml(){return `<div class="emptyIcon">↩</div><strong>Повернень за цими умовами немає</strong><span>Змініть фільтри або додайте повернення вручну.</span>`;}
 function orderLink(row){const number=row.supplierOrderNumber||'';if(!number)return '<span class="muted">—</span>';if(row.supplierOrderUrl)return `<a class="orderLink" href="${attr(row.supplierOrderUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">#${esc(number)} ↗</a><div class="cellMeta">Відкрити у постачальника</div>`;return `<strong>#${esc(number)}</strong>`;}
-function productMini(row){if(!row.productName&&!row.productImage)return '<span class="muted">—</span>';const image=row.productImage?`<img src="${attr(row.productImage)}" alt="" onerror="this.closest('.productMini').classList.add('imageError');this.remove()">`:'<span class="imagePlaceholder">▧</span>';return `<div class="productMini">${image}<div><strong>${esc(row.productName||'Товар')}</strong></div></div>`;}
+function productMini(row){if(!row.productName&&!row.productImage)return '<span class="muted">—</span>';const image=row.productImage?productImageTag(row.productImage,'productMiniPhoto'):'<span class="imagePlaceholder">▧</span>';return `<div class="productMini">${image}<div><strong>${esc(row.productName||'Товар')}</strong></div></div>`;}
 function statusBadge(id){const item=(model.config.returnStatuses||[]).find(x=>x.id===id);return item?`<span class="badge ${attr(item.tone)}">${esc(item.label)}</span>`:'<span class="badge neutral">Не визначено</span>';}
 function pickupBadge(id){const item=(model.config.pickupStatuses||[]).find(x=>x.id===id);return item?`<span class="badge ${attr(item.tone)}">${esc(item.label)}</span>`:'<span class="badge neutral">—</span>';}
 function pickupCell(row){return `<div>${pickupBadge(row.supplierPickupStatus)}${row.supplierPickedUpAt?`<div class="cellMeta">${fmtDateTimeShort(row.supplierPickedUpAt)}</div>`:(row.daysWaiting?`<div class="cellMeta ${row.daysWaiting>=3?'dangerText':''}">${row.daysWaiting} дн. очікування</div>`:'')}</div>`;}
@@ -237,7 +247,7 @@ function openDetails(id){selectedId=id;renderRows();renderDetails();document.get
 function closeDetails(){selectedId='';document.getElementById('drawerBackdrop').classList.remove('open');const drawer=document.getElementById('detailsDrawer');drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');renderRows();}
 function renderDetails(){
   const row=(model.rows||[]).find(item=>item.id===selectedId);if(!row){closeDetails();return;}document.getElementById('detailNumber').textContent=row.returnNumber||'Повернення';
-  const productBlock=(row.productName||row.productImage)?`<section class="detailSection"><h3>Товар</h3><div class="detailProduct">${row.productImage?`<img src="${attr(row.productImage)}" alt="">`:'<div class="detailImagePlaceholder">▧</div>'}<div><strong>${esc(row.productName||'Товар')}</strong></div></div></section>`:'';
+  const productBlock=(row.productName||row.productImage)?`<section class="detailSection"><h3>Товар</h3><div class="detailProduct">${row.productImage?productImageTag(row.productImage,'detailProductImage'):'<div class="detailImagePlaceholder">▧</div>'}<div><strong>${esc(row.productName||'Товар')}</strong></div></div></section>`:'';
   const pickupAction=row.supplierPickedUp?`<div class="pickedPanel"><div><span class="badge success">Забрано</span><strong>${fmtDateTime(row.supplierPickedUpAt)}</strong></div><div class="pickupMenuWrap"><button class="dotsBtn" type="button" onclick="togglePickupMenu()">•••</button><div class="pickupMenu" id="pickupMenu"><button type="button" onclick="setPickedUp('${jsq(row.id)}',false)">Скасувати відмітку про забір</button></div></div></div>`:row.supplierPickupStatus==='waiting_pickup'?`<span class="badge warning">Очікує забору</span><button class="btn pickupAction detailPickup" type="button" onclick="setPickedUp('${jsq(row.id)}',true)">✓ Позначити як забране постачальником</button><p class="detailHint">Дата та час забору зафіксуються автоматично.</p>`:`<span class="badge neutral">Ще в дорозі / не передано</span><p class="detailHint">«Прибуло» встановлюється лише після підтвердження логістики, що повернення фактично прибуло.</p>`;
   const notified=row.supplierNotified?`<div><span class="badge success">Постачальника сповіщено</span><div class="detailMuted">${fmtDateTime(row.supplierNotifiedAt)}</div><button class="btn secondary smallBtn" type="button" onclick="setSupplierNotified('${jsq(row.id)}',false)">Скасувати відмітку</button></div>`:`<button class="btn secondary" type="button" onclick="setSupplierNotified('${jsq(row.id)}',true)">✓ Позначити: постачальника сповіщено</button>`;
   document.getElementById('drawerBody').innerHTML=`<div class="detailHeaderLine"><div>${statusBadge(row.returnStatus)}</div><button class="btn secondary smallBtn" type="button" onclick="openReturnForm('${jsq(row.id)}')">Редагувати</button></div>
@@ -264,7 +274,7 @@ async function saveReturnForm(event){
 }
 function toggleOtherReason(){document.getElementById('otherReasonField').classList.toggle('hidden',document.getElementById('formReason').value!=='other');}
 function previewImageFile(){const file=document.getElementById('formProductImageFile').files[0];if(!file){renderImagePreview(document.getElementById('existingProductImage').value);return;}if(file.size>3*1024*1024){showError('Фото має бути не більше 3 МБ.');document.getElementById('formProductImageFile').value='';return;}const reader=new FileReader();reader.onload=()=>renderImagePreview(reader.result);reader.readAsDataURL(file);}
-function renderImagePreview(src){const el=document.getElementById('imagePreview');el.innerHTML=src?`<img src="${attr(src)}" alt="Попередній перегляд">`:'<span>Фото</span>';}
+function renderImagePreview(src){const el=document.getElementById('imagePreview');el.innerHTML=src?productImageTag(src,'previewProductImage'):'<span>Фото</span>'; }
 function fileToDataUrl(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file);});}
 
 function openSettings(){renderSupplierList();setSettingsTab('suppliers');call('apiSalesDriveSettings',undefined,state=>{document.getElementById('salesDriveSubdomain').value=state.subdomain||'techwolves';document.getElementById('salesDriveApiKey').value='';renderSalesDriveState(state);document.getElementById('settingsDialog').showModal();},'Відкриваємо налаштування…');}
