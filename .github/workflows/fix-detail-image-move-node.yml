@@ -16,99 +16,96 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Patch detail image to reuse the exact loaded DOM node
+      - name: Patch detail image to reuse exact loaded DOM node
         run: |
           python - <<'PY'
           from pathlib import Path
-          path=Path('src/Index.html')
-          s=path.read_text(encoding='utf-8')
+          path = Path('src/Index.html')
+          s = path.read_text(encoding='utf-8')
 
-          start=s.index('function hydrateDetailProductImage(imageUrl){')
-          end=s.index('function mobileCardHtml(row){', start)
-          hydrate=r'''function hydrateDetailProductImage(imageUrl){
-  const shell=document.getElementById('detailProductImageShell');
-  const raw=String(imageUrl||'').trim();
-  if(!shell||!raw)return;
+          start = s.index('function hydrateDetailProductImage(imageUrl){')
+          end = s.index('function mobileCardHtml(row){', start)
+          hydrate = """function hydrateDetailProductImage(imageUrl){
+            const shell=document.getElementById('detailProductImageShell');
+            const raw=String(imageUrl||'').trim();
+            if(!shell||!raw)return;
 
-  function placeholder(){
-    if(!shell||!shell.isConnected)return;
-    shell.classList.remove('loading');
-    shell.innerHTML='<div class="detailImagePlaceholder">▧</div>';
-  }
+            function placeholder(){
+              if(!shell||!shell.isConnected)return;
+              shell.classList.remove('loading');
+              shell.innerHTML='<div class=\"detailImagePlaceholder\">▧</div>';
+            }
 
-  // Best path: move the exact image element that is already visibly loaded
-  // in the list into the drawer. This avoids any second Google Drive request.
-  const liveNode=window.__detailImageNode;
-  window.__detailImageNode=null;
-  if(liveNode && liveNode.complete && liveNode.naturalWidth>0){
-    liveNode.className='detailProductImage';
-    liveNode.removeAttribute('loading');
-    liveNode.removeAttribute('onerror');
-    liveNode.onerror=null;
-    liveNode.style.display='block';
-    liveNode.referrerPolicy='no-referrer';
-    shell.replaceChildren(liveNode);
-    shell.classList.remove('loading');
-    return;
-  }
+            const liveNode=window.__detailImageNode;
+            window.__detailImageNode=null;
+            if(liveNode && liveNode.complete && liveNode.naturalWidth>0){
+              liveNode.className='detailProductImage';
+              liveNode.removeAttribute('loading');
+              liveNode.removeAttribute('onerror');
+              liveNode.onerror=null;
+              liveNode.style.display='block';
+              liveNode.referrerPolicy='no-referrer';
+              shell.replaceChildren(liveNode);
+              shell.classList.remove('loading');
+              return;
+            }
 
-  function show(src,onFail){
-    if(!src){ if(onFail)onFail(); else placeholder(); return; }
-    const img=document.createElement('img');
-    img.className='detailProductImage';
-    img.alt='';
-    img.decoding='async';
-    img.referrerPolicy='no-referrer';
-    img.onload=function(){ if(shell&&shell.isConnected)shell.classList.remove('loading'); };
-    img.onerror=function(){ if(onFail)onFail(); else placeholder(); };
-    img.src=src;
-    shell.replaceChildren(img);
-  }
+            function show(src,onFail){
+              if(!src){ if(onFail)onFail(); else placeholder(); return; }
+              const img=document.createElement('img');
+              img.className='detailProductImage';
+              img.alt='';
+              img.decoding='async';
+              img.referrerPolicy='no-referrer';
+              img.onload=function(){ if(shell&&shell.isConnected)shell.classList.remove('loading'); };
+              img.onerror=function(){ if(onFail)onFail(); else placeholder(); };
+              img.src=src;
+              shell.replaceChildren(img);
+            }
 
-  let serverTried=false;
-  function serverFallback(){
-    if(serverTried){ placeholder(); return; }
-    serverTried=true;
-    google.script.run
-      .withSuccessHandler(function(dataUrl){
-        if(dataUrl) show(dataUrl,placeholder);
-        else placeholder();
-      })
-      .withFailureHandler(placeholder)
-      .apiGetProductImageData(raw);
-  }
+            let serverTried=false;
+            function serverFallback(){
+              if(serverTried){ placeholder(); return; }
+              serverTried=true;
+              google.script.run
+                .withSuccessHandler(function(dataUrl){
+                  if(dataUrl) show(dataUrl,placeholder);
+                  else placeholder();
+                })
+                .withFailureHandler(placeholder)
+                .apiGetProductImageData(raw);
+            }
 
-  const direct=directProductImageUrl(raw);
-  shell.classList.add('loading');
-  show(direct,serverFallback);
-}
-'''
-          s=s[:start]+hydrate+s[end:]
+            const direct=directProductImageUrl(raw);
+            shell.classList.add('loading');
+            show(direct,serverFallback);
+          }
+          """
+          s = s[:start] + hydrate + s[end:]
 
-          start=s.index('function openDetails(id){')
-          end=s.index('function closeDetails(){', start)
-          open_fn=r'''function openDetails(id){
-  const row=(model.rows||[]).find(item=>item.id===id);
-  window.__detailImageNode=null;
-  if(row&&row.productImage){
-    const raw=String(row.productImage||'').trim();
-    const loaded=Array.from(document.querySelectorAll('img[data-original]')).find(function(img){
-      return String(img.dataset.original||'').trim()===raw && img.complete && img.naturalWidth>0;
-    });
-    if(loaded) window.__detailImageNode=loaded;
-  }
-  selectedId=id;
-  renderDetails();
-  document.getElementById('drawerBackdrop').classList.add('open');
-  const drawer=document.getElementById('detailsDrawer');
-  drawer.classList.add('open');
-  drawer.setAttribute('aria-hidden','false');
-  // Rebuild the list only after the loaded image node has been moved into the drawer.
-  renderRows();
-}
-'''
-          s=s[:start]+open_fn+s[end:]
-          path.write_text(s,encoding='utf-8')
+          start = s.index('function openDetails(id){')
+          end = s.index('function closeDetails(){', start)
+          open_fn = """function openDetails(id){
+            const row=(model.rows||[]).find(item=>item.id===id);
+            window.__detailImageNode=null;
+            if(row&&row.productImage){
+              const raw=String(row.productImage||'').trim();
+              const loaded=Array.from(document.querySelectorAll('img[data-original]')).find(function(img){
+                return String(img.dataset.original||'').trim()===raw && img.complete && img.naturalWidth>0;
+              });
+              if(loaded) window.__detailImageNode=loaded;
+            }
+            selectedId=id;
+            renderDetails();
+            document.getElementById('drawerBackdrop').classList.add('open');
+            const drawer=document.getElementById('detailsDrawer');
+            drawer.classList.add('open');
+            drawer.setAttribute('aria-hidden','false');
+            renderRows();
+          }
+          """
+          s = s[:start] + open_fn + s[end:]
+          path.write_text(s, encoding='utf-8')
           PY
 
       - name: Validate JavaScript syntax
