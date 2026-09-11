@@ -1,0 +1,157 @@
+name: Compact mobile return card
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/compact-return-card.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Append compact mobile card styles
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/Styles.html')
+          s=p.read_text(encoding='utf-8')
+          marker='/* MOBILE_RETURN_CARD_COMPACT_V1 */'
+          if marker not in s:
+              block=r'''
+          <style>
+          /* MOBILE_RETURN_CARD_COMPACT_V1 */
+          @media(max-width:760px){
+            .mobileCards{gap:9px!important}
+            .returnCard.mobileReturnCard{
+              padding:11px!important;
+              border-radius:18px!important;
+              box-shadow:0 4px 14px rgba(16,24,40,.035)!important;
+            }
+            .mobileReturnHeader{
+              display:grid!important;
+              grid-template-columns:minmax(0,1fr) auto!important;
+              gap:8px!important;
+              align-items:start!important;
+            }
+            .mobileReturnIdentity{display:grid!important;gap:6px!important;min-width:0!important}
+            .mobileReturnLine{
+              display:grid!important;
+              grid-template-columns:34px minmax(0,1fr)!important;
+              gap:8px!important;
+              align-items:center!important;
+              min-height:34px!important;
+            }
+            .mobileReturnIcon{
+              width:34px!important;height:34px!important;flex:0 0 34px!important;
+              border-radius:10px!important;font-size:16px!important;
+              background:#f3f6fa!important;color:#7d8797!important;
+            }
+            .mobileReturnNumber{
+              font-size:15px!important;line-height:1.05!important;font-weight:650!important;
+              letter-spacing:-.015em!important;white-space:nowrap!important;
+            }
+            .mobileReturnSupplierWrap{gap:5px!important;flex-wrap:wrap!important}
+            .mobileReturnSupplier{
+              font-size:13.5px!important;line-height:1.12!important;font-weight:650!important;
+            }
+            .mobileReturnNotified{
+              min-height:24px!important;padding:3px 8px!important;font-size:10.5px!important;
+              border-radius:999px!important;
+            }
+            .mobileReturnOrderLine{
+              margin-left:42px!important;min-height:15px!important;font-size:10.5px!important;line-height:1.2!important;
+            }
+            .mobileReturnAmount{
+              min-width:66px!important;padding:8px 10px!important;border-radius:13px!important;
+              font-size:15px!important;line-height:1!important;font-weight:750!important;
+              background:#f3f6fa!important;
+            }
+            .mobileReturnDivider{margin:8px 0!important}
+            .mobileReturnProduct{
+              display:grid!important;grid-template-columns:48px minmax(0,1fr)!important;
+              gap:10px!important;align-items:center!important;
+            }
+            .mobileReturnImage{
+              width:48px!important;height:48px!important;border-radius:11px!important;
+            }
+            .mobileReturnProductName{
+              font-size:13px!important;line-height:1.23!important;font-weight:620!important;
+              display:-webkit-box!important;-webkit-line-clamp:3!important;-webkit-box-orient:vertical!important;
+              overflow:hidden!important;
+            }
+            .mobileReturnBadges{gap:6px!important;margin-top:9px!important}
+            .mobileReturnBadges .reasonPill,.mobileReturnBadges .badge{
+              min-height:26px!important;padding:5px 8px!important;border-radius:999px!important;
+              font-size:10px!important;line-height:1!important;font-weight:700!important;
+            }
+            .mobileReturnDate{
+              margin-top:8px!important;padding-top:8px!important;gap:6px!important;
+              font-size:10.5px!important;line-height:1.15!important;
+            }
+            .mobileReturnClock{font-size:14px!important}
+          }
+          @media(max-width:390px){
+            .returnCard.mobileReturnCard{padding:10px!important;border-radius:17px!important}
+            .mobileReturnLine{grid-template-columns:32px minmax(0,1fr)!important;gap:7px!important;min-height:32px!important}
+            .mobileReturnIcon{width:32px!important;height:32px!important;flex-basis:32px!important;border-radius:9px!important;font-size:15px!important}
+            .mobileReturnNumber{font-size:14px!important}
+            .mobileReturnSupplier{font-size:12.8px!important}
+            .mobileReturnNotified{font-size:10px!important;min-height:23px!important;padding:3px 7px!important}
+            .mobileReturnOrderLine{margin-left:39px!important;font-size:10px!important}
+            .mobileReturnAmount{min-width:62px!important;padding:7px 9px!important;font-size:14px!important}
+            .mobileReturnProduct{grid-template-columns:44px minmax(0,1fr)!important;gap:8px!important}
+            .mobileReturnImage{width:44px!important;height:44px!important;border-radius:10px!important}
+            .mobileReturnProductName{font-size:12.5px!important;-webkit-line-clamp:3!important}
+            .mobileReturnBadges .reasonPill,.mobileReturnBadges .badge{min-height:25px!important;padding:4px 7px!important;font-size:9.7px!important}
+            .mobileReturnDate{font-size:10px!important}
+          }
+          </style>
+          '''
+              s=s.rstrip()+"\n"+block.strip()+"\n"
+              p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Commit compact card styles
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/Styles.html
+          if ! git diff --cached --quiet; then
+            git commit -m "Make mobile return cards compact"
+            git push
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install clasp
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Configure Google authorization
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ]; then
+            echo "Missing GitHub Actions secret CLASPRC_JSON"
+            exit 1
+          fi
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+          npm run clasp:config
+
+      - name: Push Apps Script and update web app
+        env:
+          RETURN_MONITOR_DEPLOYMENT_ID: ${{ vars.RETURN_MONITOR_DEPLOYMENT_ID }}
+        run: node scripts/deploy.cjs
+
+      - name: Remove temporary authorization
+        if: always()
+        run: rm -f "$HOME/.clasprc.json" .clasp.json
