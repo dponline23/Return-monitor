@@ -1,0 +1,128 @@
+name: Targeted detail image hydration fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-detail-image-final.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch detail image hydration only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path=Path('src/Index.html')
+          s=path.read_text(encoding='utf-8')
+          start=s.index('function hydrateDetailProductImage(imageUrl){')
+          end=s.index('function mobileCardHtml(row){',start)
+          replacement=r'''function hydrateDetailProductImage(imageUrl){
+            const shell=document.getElementById('detailProductImageShell');
+            const raw=String(imageUrl||'').trim();
+            if(!shell||!raw)return;
+
+            function placeholder(){
+              if(shell&&shell.isConnected){
+                shell.classList.remove('loading');
+                shell.innerHTML='<div class="detailImagePlaceholder">▧</div>';
+              }
+            }
+            function showImage(src,onFail){
+              if(!src){ if(onFail)onFail(); else placeholder(); return; }
+              const img=document.createElement('img');
+              img.className='detailProductImage';
+              img.alt='';
+              img.decoding='async';
+              img.onload=function(){ if(shell&&shell.isConnected)shell.classList.remove('loading'); };
+              img.onerror=function(){ if(onFail)onFail(); else placeholder(); };
+              img.src=src;
+              shell.replaceChildren(img);
+            }
+
+            // Reuse an already loaded copy from the list/table when possible.
+            const loaded=Array.from(document.querySelectorAll('img[data-original]')).find(function(img){
+              return (img.dataset.original||'')===raw && img.complete && img.naturalWidth>0;
+            });
+            if(loaded){
+              showImage(loaded.currentSrc||loaded.src,placeholder);
+              return;
+            }
+
+            let serverTried=false;
+            function loadFromServer(){
+              if(serverTried){ placeholder(); return; }
+              serverTried=true;
+              shell.classList.add('loading');
+              google.script.run
+                .withSuccessHandler(function(dataUrl){
+                  if(!shell||!shell.isConnected)return;
+                  if(dataUrl)showImage(dataUrl,placeholder);
+                  else placeholder();
+                })
+                .withFailureHandler(function(){ placeholder(); })
+                .apiGetProductImageData(raw);
+            }
+
+            // Google Drive's thumbnail endpoint is intended for embedding images.
+            const id=driveImageId(raw);
+            const embed=id?('https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w400'):directProductImageUrl(raw);
+            shell.classList.add('loading');
+            showImage(embed,loadFromServer);
+          }
+          '''
+          s=s[:start]+replacement+s[end:]
+          path.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Validate JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('src/Index.html').read_text(encoding='utf-8')
+          a=s.find('<script>'); b=s.rfind('</script>')
+          if a<0 or b<=a: raise SystemExit('script block not found')
+          Path('/tmp/index.js').write_text(s[a+8:b],encoding='utf-8')
+          PY
+          node --check /tmp/index.js
+
+      - name: Commit targeted source fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/Index.html
+          git commit -m "Fix product photo inside return details"
+          git push
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install clasp
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Configure Google authorization
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          test -n "$CLASPRC_JSON" || (echo "Missing CLASPRC_JSON" && exit 1)
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+          npm run clasp:config
+
+      - name: Push Apps Script and update web app
+        env:
+          RETURN_MONITOR_DEPLOYMENT_ID: ${{ vars.RETURN_MONITOR_DEPLOYMENT_ID }}
+        run: node scripts/deploy.cjs
+
+      - name: Cleanup auth
+        if: always()
+        run: rm -f "$HOME/.clasprc.json" .clasp.json
