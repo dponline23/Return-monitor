@@ -304,10 +304,20 @@ function apiGetProductImageData(imageUrl){
     let blob=null;
     try{ blob=file.getThumbnail(); }catch(_){ }
     if(!blob) blob=file.getBlob();
+
+    let mime=String(blob.getContentType()||'').toLowerCase();
+    if(!/^image\//i.test(mime)) mime=String(file.getMimeType()||'').toLowerCase();
+    if(!/^image\//i.test(mime)){
+      const name=String(file.getName()||'').toLowerCase();
+      if(name.endsWith('.png')) mime='image/png';
+      else if(name.endsWith('.webp')) mime='image/webp';
+      else if(name.endsWith('.gif')) mime='image/gif';
+      else mime='image/jpeg';
+    }
+
     const bytes=blob.getBytes();
-    if(bytes.length>4*1024*1024) return '';
-    return 'data:'+String(blob.getContentType()||'image/jpeg')+';base64,'+Utilities.base64Encode(bytes);
-  }catch(_){
+    return 'data:'+mime+';base64,'+Utilities.base64Encode(bytes);
+  }catch(err){
     return '';
   }
 }
