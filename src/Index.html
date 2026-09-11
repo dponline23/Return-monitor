@@ -231,6 +231,21 @@ function hydrateDetailProductImage(imageUrl){
     shell.classList.remove('loading');
     shell.innerHTML='<div class="detailImagePlaceholder">▧</div>';
   }
+
+  const liveNode=window.__detailImageNode;
+  window.__detailImageNode=null;
+  if(liveNode && liveNode.complete && liveNode.naturalWidth>0){
+    liveNode.className='detailProductImage';
+    liveNode.removeAttribute('loading');
+    liveNode.removeAttribute('onerror');
+    liveNode.onerror=null;
+    liveNode.style.display='block';
+    liveNode.referrerPolicy='no-referrer';
+    shell.replaceChildren(liveNode);
+    shell.classList.remove('loading');
+    return;
+  }
+
   function show(src,onFail){
     if(!src){ if(onFail)onFail(); else placeholder(); return; }
     const img=document.createElement('img');
@@ -242,21 +257,6 @@ function hydrateDetailProductImage(imageUrl){
     img.onerror=function(){ if(onFail)onFail(); else placeholder(); };
     img.src=src;
     shell.replaceChildren(img);
-  }
-
-  const cached=String(window.__detailImageCachedSrc||'').trim();
-  window.__detailImageCachedSrc='';
-  if(cached){
-    show(cached,placeholder);
-    return;
-  }
-
-  const existing=Array.from(document.querySelectorAll('img[data-original]')).find(function(img){
-    return String(img.dataset.original||'').trim()===raw && img.complete && img.naturalWidth>0;
-  });
-  if(existing){
-    show(existing.currentSrc||existing.src,placeholder);
-    return;
   }
 
   let serverTried=false;
@@ -300,13 +300,13 @@ function dateCell(value){return value?`<strong>${fmtDate(value)}</strong><div cl
 
 function openDetails(id){
   const row=(model.rows||[]).find(item=>item.id===id);
-  window.__detailImageCachedSrc='';
+  window.__detailImageNode=null;
   if(row&&row.productImage){
     const raw=String(row.productImage||'').trim();
     const loaded=Array.from(document.querySelectorAll('img[data-original]')).find(function(img){
       return String(img.dataset.original||'').trim()===raw && img.complete && img.naturalWidth>0;
     });
-    if(loaded) window.__detailImageCachedSrc=loaded.currentSrc||loaded.src||'';
+    if(loaded) window.__detailImageNode=loaded;
   }
   selectedId=id;
   renderDetails();
