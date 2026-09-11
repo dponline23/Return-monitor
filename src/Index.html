@@ -227,12 +227,11 @@ function hydrateDetailProductImage(imageUrl){
   if(!shell||!raw)return;
 
   function placeholder(){
-    if(shell&&shell.isConnected){
-      shell.classList.remove('loading');
-      shell.innerHTML='<div class="detailImagePlaceholder">▧</div>';
-    }
+    if(!shell||!shell.isConnected)return;
+    shell.classList.remove('loading');
+    shell.innerHTML='<div class="detailImagePlaceholder">▧</div>';
   }
-  function showImage(src,onFail){
+  function show(src,onFail){
     if(!src){ if(onFail)onFail(); else placeholder(); return; }
     const img=document.createElement('img');
     img.className='detailProductImage';
@@ -244,35 +243,37 @@ function hydrateDetailProductImage(imageUrl){
     shell.replaceChildren(img);
   }
 
-  // Reuse an already loaded copy from the list/table when possible.
-  const loaded=Array.from(document.querySelectorAll('img[data-original]')).find(function(img){
-    return (img.dataset.original||'')===raw && img.complete && img.naturalWidth>0;
+  const cached=String(window.__detailImageCachedSrc||'').trim();
+  window.__detailImageCachedSrc='';
+  if(cached){
+    show(cached,placeholder);
+    return;
+  }
+
+  const existing=Array.from(document.querySelectorAll('img[data-original]')).find(function(img){
+    return String(img.dataset.original||'').trim()===raw && img.complete && img.naturalWidth>0;
   });
-  if(loaded){
-    showImage(loaded.currentSrc||loaded.src,placeholder);
+  if(existing){
+    show(existing.currentSrc||existing.src,placeholder);
     return;
   }
 
   let serverTried=false;
-  function loadFromServer(){
+  function serverFallback(){
     if(serverTried){ placeholder(); return; }
     serverTried=true;
-    shell.classList.add('loading');
     google.script.run
       .withSuccessHandler(function(dataUrl){
-        if(!shell||!shell.isConnected)return;
-        if(dataUrl)showImage(dataUrl,placeholder);
+        if(dataUrl) show(dataUrl,placeholder);
         else placeholder();
       })
-      .withFailureHandler(function(){ placeholder(); })
+      .withFailureHandler(placeholder)
       .apiGetProductImageData(raw);
   }
 
-  // Google Drive's thumbnail endpoint is intended for embedding images.
-  const id=driveImageId(raw);
-  const embed=id?('https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w400'):directProductImageUrl(raw);
+  const direct=directProductImageUrl(raw);
   shell.classList.add('loading');
-  showImage(embed,loadFromServer);
+  show(direct,serverFallback);
 }
 function mobileCardHtml(row){
   const image=row.productImage?productImageTag(row.productImage,'compactCardPhoto'):'<span class="compactCardPhoto compactCardPlaceholder">▧</span>';
@@ -296,7 +297,24 @@ function pickupBadge(id){const item=(model.config.pickupStatuses||[]).find(x=>x.
 function pickupCell(row){return `<div>${pickupBadge(row.supplierPickupStatus)}${row.supplierPickedUpAt?`<div class="cellMeta">${fmtDateTimeShort(row.supplierPickedUpAt)}</div>`:(row.daysWaiting?`<div class="cellMeta ${row.daysWaiting>=3?'dangerText':''}">${row.daysWaiting} дн. очікування</div>`:'')}</div>`;}
 function dateCell(value){return value?`<strong>${fmtDate(value)}</strong><div class="cellMeta">${fmtTime(value)}</div>`:'<span class="muted">—</span>';}
 
-function openDetails(id){selectedId=id;renderRows();renderDetails();document.getElementById('drawerBackdrop').classList.add('open');const drawer=document.getElementById('detailsDrawer');drawer.classList.add('open');drawer.setAttribute('aria-hidden','false');}
+function openDetails(id){
+  const row=(model.rows||[]).find(item=>item.id===id);
+  window.__detailImageCachedSrc='';
+  if(row&&row.productImage){
+    const raw=String(row.productImage||'').trim();
+    const loaded=Array.from(document.querySelectorAll('img[data-original]')).find(function(img){
+      return String(img.dataset.original||'').trim()===raw && img.complete && img.naturalWidth>0;
+    });
+    if(loaded) window.__detailImageCachedSrc=loaded.currentSrc||loaded.src||'';
+  }
+  selectedId=id;
+  renderDetails();
+  document.getElementById('drawerBackdrop').classList.add('open');
+  const drawer=document.getElementById('detailsDrawer');
+  drawer.classList.add('open');
+  drawer.setAttribute('aria-hidden','false');
+  renderRows();
+}
 function closeDetails(){selectedId='';document.getElementById('drawerBackdrop').classList.remove('open');const drawer=document.getElementById('detailsDrawer');drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');renderRows();}
 function renderDetails(){
   const row=(model.rows||[]).find(item=>item.id===selectedId);if(!row){closeDetails();return;}document.getElementById('detailNumber').textContent=row.returnNumber||'Повернення';
