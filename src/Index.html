@@ -237,6 +237,7 @@ function hydrateDetailProductImage(imageUrl){
     img.className='detailProductImage';
     img.alt='';
     img.decoding='async';
+    img.referrerPolicy='no-referrer';
     img.onload=function(){ if(shell&&shell.isConnected)shell.classList.remove('loading'); };
     img.onerror=function(){ if(onFail)onFail(); else placeholder(); };
     img.src=src;
