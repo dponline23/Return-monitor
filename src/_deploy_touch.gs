@@ -1,1 +1,1 @@
-// Deployment trigger: rollback to stable commit 8efd836720599f04bb6ce7e3d19b2979fdca16a7 on 2026-09-11.
+// Deployment trigger: rollback to stable commit 9b5a448f7233b702eb3bba716fbffa1f4ed45ca7 on 2026-09-11 22:26 Europe/Kyiv.
