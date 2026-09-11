@@ -223,33 +223,56 @@ function retryProductImage(img){
 }
 function hydrateDetailProductImage(imageUrl){
   const shell=document.getElementById('detailProductImageShell');
-  if(!shell||!imageUrl)return;
-  const setFallback=function(){
-    const direct=directProductImageUrl(imageUrl);
-    if(!direct)return;
+  const raw=String(imageUrl||'').trim();
+  if(!shell||!raw)return;
+
+  function placeholder(){
+    if(shell&&shell.isConnected){
+      shell.classList.remove('loading');
+      shell.innerHTML='<div class="detailImagePlaceholder">▧</div>';
+    }
+  }
+  function showImage(src,onFail){
+    if(!src){ if(onFail)onFail(); else placeholder(); return; }
     const img=document.createElement('img');
     img.className='detailProductImage';
     img.alt='';
-    img.onload=function(){shell.classList.remove('loading');};
-    img.onerror=function(){shell.innerHTML='<div class="detailImagePlaceholder">▧</div>';};
-    img.src=direct;
+    img.decoding='async';
+    img.onload=function(){ if(shell&&shell.isConnected)shell.classList.remove('loading'); };
+    img.onerror=function(){ if(onFail)onFail(); else placeholder(); };
+    img.src=src;
     shell.replaceChildren(img);
-  };
+  }
+
+  // Reuse an already loaded copy from the list/table when possible.
+  const loaded=Array.from(document.querySelectorAll('img[data-original]')).find(function(img){
+    return (img.dataset.original||'')===raw && img.complete && img.naturalWidth>0;
+  });
+  if(loaded){
+    showImage(loaded.currentSrc||loaded.src,placeholder);
+    return;
+  }
+
+  let serverTried=false;
+  function loadFromServer(){
+    if(serverTried){ placeholder(); return; }
+    serverTried=true;
+    shell.classList.add('loading');
+    google.script.run
+      .withSuccessHandler(function(dataUrl){
+        if(!shell||!shell.isConnected)return;
+        if(dataUrl)showImage(dataUrl,placeholder);
+        else placeholder();
+      })
+      .withFailureHandler(function(){ placeholder(); })
+      .apiGetProductImageData(raw);
+  }
+
+  // Google Drive's thumbnail endpoint is intended for embedding images.
+  const id=driveImageId(raw);
+  const embed=id?('https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w400'):directProductImageUrl(raw);
   shell.classList.add('loading');
-  google.script.run
-    .withSuccessHandler(function(dataUrl){
-      if(!shell.isConnected)return;
-      if(!dataUrl){setFallback();return;}
-      const img=document.createElement('img');
-      img.className='detailProductImage';
-      img.alt='';
-      img.onload=function(){shell.classList.remove('loading');};
-      img.onerror=setFallback;
-      img.src=dataUrl;
-      shell.replaceChildren(img);
-    })
-    .withFailureHandler(setFallback)
-    .apiGetProductImageData(imageUrl);
+  showImage(embed,loadFromServer);
 }
 function mobileCardHtml(row){
   const image=row.productImage?productImageTag(row.productImage,'compactCardPhoto'):'<span class="compactCardPhoto compactCardPlaceholder">▧</span>';
