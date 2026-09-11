@@ -221,18 +221,48 @@ function retryProductImage(img){
     .withFailureHandler(function(){img.style.display='none';})
     .apiGetProductImageData(original);
 }
+function hydrateDetailProductImage(imageUrl){
+  const shell=document.getElementById('detailProductImageShell');
+  if(!shell||!imageUrl)return;
+  const setFallback=function(){
+    const direct=directProductImageUrl(imageUrl);
+    if(!direct)return;
+    const img=document.createElement('img');
+    img.className='detailProductImage';
+    img.alt='';
+    img.onload=function(){shell.classList.remove('loading');};
+    img.onerror=function(){shell.innerHTML='<div class="detailImagePlaceholder">▧</div>';};
+    img.src=direct;
+    shell.replaceChildren(img);
+  };
+  shell.classList.add('loading');
+  google.script.run
+    .withSuccessHandler(function(dataUrl){
+      if(!shell.isConnected)return;
+      if(!dataUrl){setFallback();return;}
+      const img=document.createElement('img');
+      img.className='detailProductImage';
+      img.alt='';
+      img.onload=function(){shell.classList.remove('loading');};
+      img.onerror=setFallback;
+      img.src=dataUrl;
+      shell.replaceChildren(img);
+    })
+    .withFailureHandler(setFallback)
+    .apiGetProductImageData(imageUrl);
+}
 function mobileCardHtml(row){
   const image=row.productImage?productImageTag(row.productImage,'compactCardPhoto'):'<span class="compactCardPhoto compactCardPlaceholder">▧</span>';
   const supplier=esc(row.supplierName||'Постачальник не вказаний');
   const notified=row.supplierNotified?'<span class="compactNotified" title="Постачальника сповіщено">✓</span>':'';
   return `<article class="returnCard compactCardV2" onclick="openDetails('${jsq(row.id)}')">
     <div class="compactCardHead">
-      <div class="compactCardIdentity"><strong class="compactCardRtn">${esc(compactReturnNumber(row.returnNumber))}</strong><span class="compactCardSupplier">${supplier}</span>${notified}</div>
+      <div class="compactCardIdentity"><strong class="compactCardRtn">${esc(compactReturnNumber(row.returnNumber))}</strong></div>
       <strong class="compactCardAmount">${money(row.amount)}</strong>
     </div>
     ${(row.productName||row.productImage)?`<div class="compactCardProduct">${image}<div class="compactCardProductName">${esc(row.productName||'Товар')}</div></div>`:''}
     <div class="compactCardBadges"><span class="reasonPill">${esc(reasonLabel(row.returnReason,row.returnReasonComment)||'Причина не вказана')}</span>${statusBadge(row.returnStatus)}${pickupBadge(row.supplierPickupStatus)}</div>
-    <div class="compactCardDate"><span>◷</span><span>${fmtDateTimeShort(row.returnDate||row.arrivedAt||row.returnStartedAt)}</span></div>
+    <div class="compactCardMeta"><span class="compactCardSupplierBottom">${supplier}${notified}</span><span class="compactCardDateBottom">${fmtDateTimeShort(row.returnDate||row.arrivedAt||row.returnStartedAt)}</span></div>
   </article>`;
 }
 function emptyStateHtml(){return `<div class="emptyIcon">↩</div><strong>Повернень за цими умовами немає</strong><span>Змініть фільтри або додайте повернення вручну.</span>`;}
@@ -247,7 +277,7 @@ function openDetails(id){selectedId=id;renderRows();renderDetails();document.get
 function closeDetails(){selectedId='';document.getElementById('drawerBackdrop').classList.remove('open');const drawer=document.getElementById('detailsDrawer');drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');renderRows();}
 function renderDetails(){
   const row=(model.rows||[]).find(item=>item.id===selectedId);if(!row){closeDetails();return;}document.getElementById('detailNumber').textContent=row.returnNumber||'Повернення';
-  const productBlock=(row.productName||row.productImage)?`<section class="detailSection"><h3>Товар</h3><div class="detailProduct">${row.productImage?productImageTag(row.productImage,'detailProductImage'):'<div class="detailImagePlaceholder">▧</div>'}<div><strong>${esc(row.productName||'Товар')}</strong></div></div></section>`:'';
+  const productBlock=(row.productName||row.productImage)?`<section class="detailSection"><h3>Товар</h3><div class="detailProduct">${row.productImage?'<div class="detailImageShell" id="detailProductImageShell"><div class="detailImagePlaceholder">▧</div></div>':'<div class="detailImagePlaceholder">▧</div>'}<div><strong>${esc(row.productName||'Товар')}</strong></div></div></section>`:'';
   const pickupAction=row.supplierPickedUp?`<div class="pickedPanel"><div><span class="badge success">Забрано</span><strong>${fmtDateTime(row.supplierPickedUpAt)}</strong></div><div class="pickupMenuWrap"><button class="dotsBtn" type="button" onclick="togglePickupMenu()">•••</button><div class="pickupMenu" id="pickupMenu"><button type="button" onclick="setPickedUp('${jsq(row.id)}',false)">Скасувати відмітку про забір</button></div></div></div>`:row.supplierPickupStatus==='waiting_pickup'?`<span class="badge warning">Очікує забору</span><button class="btn pickupAction detailPickup" type="button" onclick="setPickedUp('${jsq(row.id)}',true)">✓ Позначити як забране постачальником</button><p class="detailHint">Дата та час забору зафіксуються автоматично.</p>`:`<span class="badge neutral">Ще в дорозі / не передано</span><p class="detailHint">«Прибуло» встановлюється лише після підтвердження логістики, що повернення фактично прибуло.</p>`;
   const notified=row.supplierNotified?`<div><span class="badge success">Постачальника сповіщено</span><div class="detailMuted">${fmtDateTime(row.supplierNotifiedAt)}</div><button class="btn secondary smallBtn" type="button" onclick="setSupplierNotified('${jsq(row.id)}',false)">Скасувати відмітку</button></div>`:`<button class="btn secondary" type="button" onclick="setSupplierNotified('${jsq(row.id)}',true)">✓ Позначити: постачальника сповіщено</button>`;
   document.getElementById('drawerBody').innerHTML=`<div class="detailHeaderLine"><div>${statusBadge(row.returnStatus)}</div><button class="btn secondary smallBtn" type="button" onclick="openReturnForm('${jsq(row.id)}')">Редагувати</button></div>
@@ -256,6 +286,7 @@ function renderDetails(){
     <section class="detailSection"><h3>Дані для постачальника</h3><div class="detailGrid"><span>Першочергова ТТН</span><strong>${esc(row.originalTtn||row.ttn||'—')}</strong><span>ТТН повернення</span><strong>${esc(row.returnTtn||'—')}</strong><span>Замовлення на сайті</span><div>${orderLink(row)}</div><span>Назва товару</span><strong>${esc(row.productName||'—')}</strong></div><div class="modalActions compact"><button class="btn primary" type="button" onclick="copySupplierData('${jsq(row.id)}')">⧉ Скопіювати все</button>${notified}</div></section>
     <section class="detailSection"><h3>Повернення</h3><div class="detailGrid"><span>Причина</span><strong>${esc(reasonLabel(row.returnReason,row.returnReasonComment)||'—')}</strong><span>Статус</span><div>${statusBadge(row.returnStatus)}</div><span>Сума</span><strong>${money(row.amount)}</strong><span>Дата повернення</span><strong>${row.returnDate?fmtDateTime(row.returnDate):'—'}</strong>${row.deliveryStatus?`<span>Логістика</span><div><strong>${esc(row.deliveryStatus)}</strong>${row.returnTtn||row.ttn?`<div class="detailMuted">${esc(row.returnTtn||row.ttn)}</div>`:''}</div>`:''}</div></section>
     <section class="detailSection pickupSection"><h3>Забір постачальником</h3>${pickupAction}</section>`;
+  if(row.productImage)hydrateDetailProductImage(row.productImage);
 }
 function togglePickupMenu(){const el=document.getElementById('pickupMenu');if(el)el.classList.toggle('open');}
 function replaceModelRow(updated){if(!updated||!updated.id)return;const i=(model.rows||[]).findIndex(row=>row.id===updated.id);if(i>=0)model.rows[i]=Object.assign({},model.rows[i],updated);else model.rows.unshift(updated);}
