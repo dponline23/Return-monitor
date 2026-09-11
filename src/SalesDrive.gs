@@ -95,14 +95,15 @@ function syncSalesDrive_(){
 
   preserveKnownSeparateReturnLegs_(unique);
 
-  const saved=upsertSalesDriveOrders_(unique);
-  const imageSaved=saveSalesDriveProductImages_(unique);
-  const detectedReturns=unique.filter(item=>item.isReturn).length;
+  const returnItems=unique.filter(item=>item.isReturn);
+  const saved=upsertSalesDriveOrders_(returnItems);
+  const imageSaved=saveSalesDriveProductImages_(returnItems);
+  const detectedReturns=returnItems.length;
   p.setProperty(SALESDRIVE_CONFIG.lastSyncProperty,now.toISOString());
   return {
     ok:true,
     received:received,
-    usable:unique.length,
+    usable:returnItems.length,
     detectedReturns:detectedReturns,
     imagesUpdated:imageSaved,
     statusCount:Object.keys(statusMap).length,

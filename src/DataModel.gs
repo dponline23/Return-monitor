@@ -64,9 +64,19 @@ function isCarrierReturnedToSender_(row){
 
 function isReturnRecord_(row){
   if(!row) return false;
-  if(row.source==='manual') return true;
-  if(row.returnNumber||row.returnStartedAt||row.returnStatus) return true;
-  return looksLikeReturn_(row.deliveryStatus);
+  if(String(row.source||'').toLowerCase()==='manual') return true;
+
+  // A generated RTN number / generic in_transit status is not proof of a return.
+  // For synced SalesDrive rows require a real return signal from logistics/status,
+  // a separate return TTN, or an already confirmed user action.
+  if(row.supplierPickedUp||row.supplierNotified||row.arrivedAt) return true;
+  if(looksLikeReturn_(row.deliveryStatus)) return true;
+
+  const original=normalizeTrackingNumber_(row.originalTtn||row.ttn||'');
+  const returned=normalizeTrackingNumber_(row.returnTtn||'');
+  if(returned&&original&&returned!==original) return true;
+
+  return false;
 }
 
 function findReturnById_(id){
