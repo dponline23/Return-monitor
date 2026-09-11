@@ -21,18 +21,25 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           p=Path('src/Index.html')
-          s=p.read_text(encoding='utf-8')
-          old="""  const productBlock=(row.productName||row.productImage)?`<section class=\"detailSection\"><h3>Товар</h3><div class=\"detailProduct\">${row.productImage?'<div class=\"detailImageShell\" id=\"detailProductImageShell\"><div class=\"detailImagePlaceholder\">▧</div></div>':'<div class=\"detailImagePlaceholder\">▧</div>'}<div><strong>${esc(row.productName||'Товар')}</strong></div></div></section>`:'';"""
-          new="""  const detailImage=row.productImage?productImageTag(row.productImage,'detailProductImage'):'<div class=\"detailImagePlaceholder\">▧</div>';
-  const productBlock=(row.productName||row.productImage)?`<section class=\"detailSection\"><h3>Товар</h3><div class=\"detailProduct\">${detailImage}<div><strong>${esc(row.productName||'Товар')}</strong></div></div></section>`:'';"""
-          if old not in s:
-            raise SystemExit('productBlock target not found')
-          s=s.replace(old,new,1)
-          old2="""  if(row.productImage)hydrateDetailProductImage(row.productImage);"""
-          if old2 not in s:
-            raise SystemExit('hydrate call not found')
-          s=s.replace(old2,'',1)
-          p.write_text(s,encoding='utf-8')
+          lines=p.read_text(encoding='utf-8').splitlines()
+          out=[]
+          replaced=False
+          removed=False
+          for line in lines:
+              if 'const productBlock=(row.productName||row.productImage)?' in line:
+                  out.append("  const detailImage=row.productImage?productImageTag(row.productImage,'detailProductImage'):'<div class=\"detailImagePlaceholder\">▧</div>';" )
+                  out.append("  const productBlock=(row.productName||row.productImage)?`<section class=\"detailSection\"><h3>Товар</h3><div class=\"detailProduct\">${detailImage}<div><strong>${esc(row.productName||'Товар')}</strong></div></div></section>`:'';" )
+                  replaced=True
+                  continue
+              if 'if(row.productImage)hydrateDetailProductImage(row.productImage);' in line:
+                  removed=True
+                  continue
+              out.append(line)
+          if not replaced:
+              raise SystemExit('productBlock target not found')
+          if not removed:
+              raise SystemExit('hydrate call not found')
+          p.write_text('\n'.join(out)+'\n',encoding='utf-8')
           PY
 
       - name: Validate JavaScript syntax
