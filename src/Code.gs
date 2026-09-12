@@ -69,7 +69,8 @@ function include_(name){
 .refPickupBox .refPickupIcon svg{display:block!important;margin:0!important}
 .rmTrackingLink,.compactCardReturnTtn{cursor:pointer!important}
 .rmTrackingLink strong,.compactCardReturnTtn strong{color:#1769d7!important;text-decoration:underline!important;text-decoration-thickness:1px!important;text-underline-offset:2px!important}
-.compactCardReturnTtn{text-decoration:none!important}
+.compactCardReturnTtn{text-decoration:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;touch-action:manipulation!important}
+.compactCardReturnTtn *{-webkit-user-select:none!important;user-select:none!important}
 
 @media(max-width:760px){
   .dashboardHero{overflow:visible!important;margin-bottom:9px!important}
@@ -382,6 +383,15 @@ function rmMarkTrackingLinks_(){
     value.title='Відкрити відстеження';
   });
 }
+function rmFinalizeMobileTtnLinks_(){
+  document.querySelectorAll('a.compactCardReturnTtn[href]').forEach(function(link){
+    link.setAttribute('target','_top');
+    link.removeAttribute('onclick');
+    link.removeAttribute('onpointerdown');
+    link.removeAttribute('ontouchstart');
+    link.removeAttribute('rel');
+  });
+}
 document.addEventListener('click',function(event){
   var target=event.target&&event.target.closest?event.target.closest('.rmTrackingLink'):null;
   if(!target)return;
@@ -401,6 +411,13 @@ window.addEventListener('load',function(){
       window.renderDetails=wrapped;
     }
     rmMarkTrackingLinks_();
+    var finalRenderRows=window.renderRows;
+    if(typeof finalRenderRows==='function'&&!finalRenderRows.__rmNativeTtnWrapped){
+      var rowsWrapped=function(){finalRenderRows();rmFinalizeMobileTtnLinks_();};
+      rowsWrapped.__rmNativeTtnWrapped=true;
+      window.renderRows=rowsWrapped;
+    }
+    rmFinalizeMobileTtnLinks_();
   },0);
 });
 
