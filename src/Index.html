@@ -450,10 +450,13 @@ window.addEventListener('load',function(){
     const image=row.productImage?productImageTag(row.productImage,'compactCardPhoto'):'<span class="compactCardPhoto compactCardPlaceholder">▧</span>';
     const supplier=esc(row.supplierName||'Постачальник не вказаний');
     const notified=row.supplierNotified?'<span class="compactNotified" title="Постачальника сповіщено">✓</span>':'';
+    const trackingUrl=row.returnTtn&&typeof rmTrackingUrl_==='function'?rmTrackingUrl_(row.returnTtn):'';
     const ttn=row.returnTtn
-      ?`<span class="compactCardReturnTtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H5v4"/><path d="M5.5 10.5A8 8 0 1 1 7 18"/></svg><span class="compactCardTtnLabel">ТТН</span><strong>${esc(row.returnTtn)}</strong></span>`
+      ?trackingUrl
+        ?`<a class="compactCardReturnTtn" href="${attr(trackingUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H5v4"/><path d="M5.5 10.5A8 8 0 1 1 7 18"/></svg><span class="compactCardTtnLabel">ТТН</span><strong>${esc(row.returnTtn)}</strong></a>`
+        :`<span class="compactCardReturnTtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H5v4"/><path d="M5.5 10.5A8 8 0 1 1 7 18"/></svg><span class="compactCardTtnLabel">ТТН</span><strong>${esc(row.returnTtn)}</strong></span>`
       :'<span class="compactCardTtnEmpty"></span>';
-    return `<article class="returnCard compactCardV2" onclick="openDetails('${jsq(row.id)}')">
+    return `<article class="returnCard compactCardV2" onclick="if(event.target&&event.target.closest&&event.target.closest('.compactCardReturnTtn'))return;openDetails('${jsq(row.id)}')">
       <div class="compactCardHead">
         <div class="compactCardIdentity"><strong class="compactCardRtn">${esc(compactReturnNumber(row.returnNumber))}</strong></div>
         <strong class="compactCardAmount">${money(row.amount)}</strong>
