@@ -58,6 +58,13 @@ function include_(name){
   .heroStats .statChevron{display:none!important}
   .statCard{min-height:96px!important;padding:14px 16px!important}
 }
+
+.detailsDrawer.refDetails .refMore{display:none!important}
+.detailsDrawer.refDetails .drawerHead{grid-template-columns:42px minmax(0,1fr)!important}
+.refProductInner img{object-fit:contain!important;object-position:center!important;background:#fff!important;padding:3px!important}
+.refPickupBox .refPickupIcon{display:grid!important;place-items:center!important;line-height:0!important}
+.refPickupBox .refPickupIcon svg{display:block!important;margin:0!important}
+
 @media(max-width:760px){
   .dashboardHero{overflow:visible!important;margin-bottom:9px!important}
   .heroCopy h1 span{display:block!important}
@@ -76,7 +83,7 @@ function include_(name){
   .dashboardHero .periodSyncCard::before{margin:10px 0!important}
   .dashboardHero .heroPeriod{
     min-height:60px!important;
-    grid-template-columns:31px minmax(0,1fr)!important;
+    grid-template-columns:31px minmax(0,1fr) 16px!important;
     gap:7px!important;
     padding:7px 10px!important;
     border-radius:15px 0 0 15px!important;
@@ -85,6 +92,8 @@ function include_(name){
   .dashboardHero .heroActionIcon svg{width:27px!important;height:27px!important}
   .dashboardHero .heroPeriodText small{font-size:9.5px!important;line-height:1!important;margin-bottom:2px!important}
   .dashboardHero .heroPeriodText strong{font-size:16px!important;line-height:1.05!important}
+  .dashboardHero .periodChevronSvg{display:grid!important;place-items:center!important;width:16px!important;height:16px!important;color:#667085!important}
+  .dashboardHero .periodChevronSvg svg{width:13px!important;height:13px!important;fill:none!important;stroke:currentColor!important;stroke-width:2.1!important;stroke-linecap:round!important;stroke-linejoin:round!important}
   .dashboardHero .heroSync{
     min-height:60px!important;
     padding:6px 8px!important;
@@ -97,25 +106,29 @@ function include_(name){
     min-height:44px!important;
     border-radius:13px!important;
     font-size:13.5px!important;
-    gap:7px!important;
+    gap:8px!important;
   }
   .dashboardHero .heroSettings{background:#fff!important;border:1px solid #e4e7ec!important}
   .dashboardHero .heroAdd{
-    background:linear-gradient(135deg,#0a8f49,#087a3d)!important;
-    border-color:#087a3d!important;
-    box-shadow:0 5px 12px rgba(8,122,61,.16)!important;
+    background:#eef9f2!important;
+    border:1px solid #c9e9d5!important;
+    color:#087a3d!important;
+    box-shadow:0 4px 10px rgba(16,24,40,.035)!important;
   }
-  .dashboardHero .heroAdd .heroPlus{
+  .dashboardHero .heroAddIcon{
+    width:28px!important;
+    height:28px!important;
+    border-radius:9px!important;
+    background:#087a3d!important;
+    color:#fff!important;
     display:grid!important;
     place-items:center!important;
-    width:24px!important;
-    height:24px!important;
-    border-radius:50%!important;
-    background:rgba(255,255,255,.16)!important;
-    font-size:18px!important;
-    line-height:1!important;
+    flex:0 0 28px!important;
   }
+  .dashboardHero .heroAddIcon svg{width:16px!important;height:16px!important;fill:none!important;stroke:currentColor!important;stroke-width:2.2!important;stroke-linecap:round!important}
   .dashboardHero .heroSettings .heroBtnIcon{font-size:16px!important}
+
+  .detailsDrawer.refDetails .drawerHead{grid-template-columns:34px minmax(0,1fr)!important}
 
   .heroStats{gap:7px!important;margin-bottom:10px!important}
   .heroStats .statCard{
@@ -221,6 +234,25 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 
 document.addEventListener('DOMContentLoaded',function(){
+  var period=document.querySelector('.dashboardHero .heroPeriod');
+  var periodText=period&&period.querySelector('.heroPeriodText');
+  if(periodText)periodText.innerHTML='<small>Період</small><strong>За період</strong>';
+  if(period&&!period.querySelector('.periodChevronSvg')){
+    var chevron=document.createElement('span');
+    chevron.className='periodChevronSvg';
+    chevron.setAttribute('aria-hidden','true');
+    chevron.innerHTML='<svg viewBox="0 0 20 20"><path d="m5 7 5 6 5-6"></path></svg>';
+    var panel=period.querySelector('.periodInputs');
+    period.insertBefore(chevron,panel||null);
+  }
+
+  var add=document.querySelector('.dashboardHero .heroAdd');
+  if(add){
+    add.innerHTML='<span class="heroAddIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg></span><span>Додати</span>';
+  }
+});
+
+document.addEventListener('DOMContentLoaded',function(){
   var baseMobileCardHtml=window.mobileCardHtml;
   if(typeof baseMobileCardHtml!=='function')return;
   window.mobileCardHtml=function(row){
@@ -238,6 +270,58 @@ document.addEventListener('DOMContentLoaded',function(){
     return html.slice(0,start)+marker+ttn+'<span class="compactCardMetaRight">'+inner+'</span>'+html.slice(end);
   };
   if(window.innerWidth<=760&&typeof window.renderRows==='function')window.renderRows();
+});
+
+window.addEventListener('load',function(){
+  var baseRenderDetails=window.renderDetails;
+  if(typeof baseRenderDetails==='function'){
+    window.renderDetails=function(){
+      baseRenderDetails();
+      var copyButton=document.querySelector('#drawerBody .refCopyAll');
+      if(copyButton){
+        copyButton.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><rect x="4" y="4" width="11" height="11" rx="2"></rect></svg> Знімок повернення';
+      }
+    };
+  }
+
+  window.copySupplierData=async function(id){
+    var row=(model.rows||[]).find(function(item){return item.id===id;});
+    if(!row)return;
+    var statusItem=(model.config.returnStatuses||[]).find(function(item){return item.id===row.returnStatus;});
+    var pickupItem=(model.config.pickupStatuses||[]).find(function(item){return item.id===row.supplierPickupStatus;});
+    var supplierOrder=row.supplierOrderNumber?('#'+row.supplierOrderNumber):'—';
+    if(row.supplierOrderUrl)supplierOrder+=' '+row.supplierOrderUrl;
+    var dateValue=row.returnDate||row.arrivedAt||row.returnStartedAt||'';
+    var text=[
+      'Повернення '+(row.returnNumber||'—'),
+      '',
+      'Постачальник: '+(row.supplierName||'—'),
+      'Замовлення джерела: '+(row.orderNumber?('#'+row.orderNumber):'—'),
+      'Товар: '+(row.productName||'—'),
+      '',
+      'Причина: '+(reasonLabel(row.returnReason,row.returnReasonComment)||'—'),
+      'Статус повернення: '+(statusItem?statusItem.label:'—'),
+      'Забір постачальником: '+(pickupItem?pickupItem.label:(row.supplierPickedUp?'Забрано':'—')),
+      '',
+      'Першочергова ТТН: '+(row.originalTtn||row.ttn||'—'),
+      'ТТН повернення: '+(row.returnTtn||'—'),
+      'Замовлення на сайті постачальника: '+supplierOrder,
+      '',
+      'Сума: '+money(row.amount),
+      'Дата повернення: '+(dateValue?fmtDateTimeShort(dateValue):'—')
+    ].join('\n');
+    var done=function(){toast('Знімок повернення скопійовано');};
+    try{
+      if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);done();return;}
+    }catch(_){ }
+    var area=document.createElement('textarea');
+    area.value=text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+    done();
+  };
 });
 
 function rmCarrierTab(tab){
