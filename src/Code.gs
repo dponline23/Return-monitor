@@ -279,7 +279,7 @@ document.addEventListener('DOMContentLoaded',function(){
       var url=rmTrackingUrl_(row.returnTtn);
       var inner='<span class="compactCardTtnIcon">↩</span><span class="compactCardTtnLabel">ТТН</span><strong>'+esc(row.returnTtn)+'</strong>';
       ttn=url
-        ? '<a class="compactCardReturnTtn" href="'+attr(url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" ontouchstart="event.stopPropagation()">'+inner+'</a>'
+        ? '<a class="compactCardReturnTtn" href="'+attr(url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">'+inner+'</a>'
         : '<span class="compactCardReturnTtn">'+inner+'</span>';
     }
     var marker='<div class="compactCardMeta">';
@@ -357,18 +357,15 @@ function rmRowForTtn_(ttn){
   })||null;
 }
 function rmTrackingUrl_(ttn){
-  var n=rmNormalizeTtn_(ttn);
+  var raw=String(ttn||'').trim().toUpperCase().replace(/\s+/g,'');
+  var n=rmNormalizeTtn_(raw);
   if(!n)return '';
-  var row=rmRowForTtn_(n);
-  var carrier=String(row&&row.carrier||'').toLowerCase();
-  var digitsOnly=/^[0-9]+$/.test(n);
-  var novaByNumber=digitsOnly&&n.length===14;
-  var ukrByNumber=digitsOnly&&((n.length===13&&(n.indexOf('042')===0||n.indexOf('050')===0))||(n.length===12&&(n.indexOf('42')===0||n.indexOf('50')===0)));
-  if(/нова|novaposhta|nova post/.test(carrier)||novaByNumber) return 'https://novaposhta.ua/tracking/'+encodeURIComponent(n);
-  if(/укр|ukrposhta/.test(carrier)||ukrByNumber){
-    if(n.length===12&&(n.indexOf('42')===0||n.indexOf('50')===0)) n='0'+n;
-    return 'https://track.ukrposhta.ua/tracking_UA.html?barcode='+encodeURIComponent(n);
+  if(raw.indexOf('PRM-')===0||n.indexOf('201')===0){
+    var parcelId=raw.indexOf('PRM-')===0?raw:n;
+    return 'https://rozetka.delivery/tracking/parcel?parcel_id='+encodeURIComponent(parcelId);
   }
+  if(n.indexOf('050')===0) return 'https://track.ukrposhta.ua/?barcode='+encodeURIComponent(n);
+  if(n.indexOf('204')===0||n.indexOf('5900')===0) return 'https://tracking.novaposhta.ua/#/uk/'+encodeURIComponent(n);
   return '';
 }
 function rmMarkTrackingLinks_(){
@@ -385,19 +382,6 @@ function rmMarkTrackingLinks_(){
     value.title='Відкрити відстеження';
   });
 }
-document.addEventListener('click',function(event){
-  var link=event.target&&event.target.closest?event.target.closest('.compactCardReturnTtn'):null;
-  if(!link)return;
-  var href=link.getAttribute('href')||'';
-  if(!href){
-    var strong=link.querySelector('strong');
-    href=rmTrackingUrl_(strong?strong.textContent:'');
-  }
-  if(!href)return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  window.open(href,'_blank','noopener');
-},true);
 document.addEventListener('click',function(event){
   var target=event.target&&event.target.closest?event.target.closest('.rmTrackingLink'):null;
   if(!target)return;
