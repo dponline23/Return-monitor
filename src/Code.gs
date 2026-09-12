@@ -48,13 +48,14 @@ function include_(name){
   .dashboardHero .heroBtnIcon,.dashboardHero .heroPlus{font-size:13px!important;line-height:1!important}
 
   .detailsDrawer.refDetails{width:min(680px,48vw)!important;max-width:680px!important}
-  .tableRow{grid-template-columns:125px 145px 160px minmax(290px,2fr) 145px 145px 150px 100px 112px 46px!important;min-width:1140px!important}
+  .tableRow{grid-template-columns:110px 105px 130px minmax(260px,2fr) 120px 110px 125px 85px 95px 38px!important;min-width:1040px!important}
   .tableRow>.checkCell{display:none!important}
-  .tableHead>div,.dataRow>div{justify-self:center!important;text-align:center!important}
+  .tableHead>div,.dataRow>div{justify-self:center!important;text-align:center!important;min-width:0!important;max-width:100%!important}
   .tableHead .right,.dataRow .right{text-align:center!important}
-  .dataRow>div:nth-child(5){min-width:0!important;max-width:100%!important;overflow:hidden!important}
-  .dataRow .productMini{width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important;justify-content:flex-start!important}
-  .dataRow .productMini>div{flex:1 1 auto!important;min-width:0!important;max-width:100%!important;overflow:hidden!important;text-align:left!important}
+  .dataRow>div:nth-child(5){width:100%!important;min-width:0!important;max-width:100%!important;overflow:hidden!important}
+  .dataRow .productMini{display:grid!important;grid-template-columns:40px minmax(0,1fr)!important;align-items:center!important;gap:8px!important;width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important;justify-content:stretch!important}
+  .dataRow .productMini img,.dataRow .productMini .imagePlaceholder{width:38px!important;height:38px!important;max-width:38px!important;max-height:38px!important;object-fit:contain!important;object-position:center!important;background:#fff!important;padding:1px!important;flex:0 0 38px!important}
+  .dataRow .productMini>div{width:100%!important;min-width:0!important;max-width:100%!important;overflow:hidden!important;text-align:left!important}
   .dataRow .productMini strong{display:block!important;width:100%!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
   .dataRow .actionsCell{justify-content:center!important}
   .heroStats .statChevron{display:none!important}
