@@ -679,3 +679,46 @@ window.addEventListener('load',()=>{
   .detailImageShell{width:68px;height:68px;flex-basis:68px}
 }
 </style>
+
+<style>
+/* MOBILE_COMPACT_CARD_LAYOUT_V3 */
+@media(max-width:760px){
+  .compactCardProduct{
+    grid-template-columns:60px minmax(0,1fr)!important;
+    gap:10px!important;
+    margin-top:9px!important;
+    padding-top:9px!important;
+  }
+  .compactCardPhoto{
+    width:60px!important;
+    height:60px!important;
+    border-radius:12px!important;
+    object-fit:cover!important;
+  }
+  .compactCardMeta{
+    display:flex!important;
+    flex-direction:column!important;
+    justify-content:flex-start!important;
+    align-items:flex-end!important;
+    gap:3px!important;
+    flex-wrap:nowrap!important;
+    margin-top:8px!important;
+    padding-top:7px!important;
+    text-align:right!important;
+  }
+  .compactCardSupplierBottom{max-width:100%!important}
+}
+@media(max-width:390px){
+  .compactCardProduct{
+    grid-template-columns:56px minmax(0,1fr)!important;
+    gap:8px!important;
+    margin-top:8px!important;
+    padding-top:8px!important;
+  }
+  .compactCardPhoto{
+    width:56px!important;
+    height:56px!important;
+    border-radius:11px!important;
+  }
+}
+</style>
