@@ -125,6 +125,7 @@ function include_(name){
     place-items:center!important;
     flex:0 0 28px!important;
   }
+  .dashboardHero .heroAdd .heroAddIcon{transform:translateX(-7px)!important}
   .dashboardHero .heroAddIcon svg{width:16px!important;height:16px!important;fill:none!important;stroke:currentColor!important;stroke-width:2.2!important;stroke-linecap:round!important}
   .dashboardHero .heroSettings .heroBtnIcon{font-size:16px!important}
 
