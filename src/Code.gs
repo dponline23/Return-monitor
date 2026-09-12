@@ -358,9 +358,12 @@ function rmTrackingUrl_(ttn){
   if(!n)return '';
   var row=rmRowForTtn_(n);
   var carrier=String(row&&row.carrier||'').toLowerCase();
-  if(/нова|novaposhta|nova post/.test(carrier)||/^\d{14}$/.test(n)) return 'https://novaposhta.ua/tracking/'+encodeURIComponent(n);
-  if(/укр|ukrposhta/.test(carrier)||/^0(?:42|50)\d{10}$/.test(n)||/^(?:42|50)\d{10}$/.test(n)){
-    if(/^(?:42|50)\d{10}$/.test(n)) n='0'+n;
+  var digitsOnly=/^[0-9]+$/.test(n);
+  var novaByNumber=digitsOnly&&n.length===14;
+  var ukrByNumber=digitsOnly&&((n.length===13&&(n.indexOf('042')===0||n.indexOf('050')===0))||(n.length===12&&(n.indexOf('42')===0||n.indexOf('50')===0)));
+  if(/нова|novaposhta|nova post/.test(carrier)||novaByNumber) return 'https://novaposhta.ua/tracking/'+encodeURIComponent(n);
+  if(/укр|ukrposhta/.test(carrier)||ukrByNumber){
+    if(n.length===12&&(n.indexOf('42')===0||n.indexOf('50')===0)) n='0'+n;
     return 'https://track.ukrposhta.ua/tracking_UA.html?barcode='+encodeURIComponent(n);
   }
   return '';
