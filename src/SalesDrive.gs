@@ -126,11 +126,51 @@ function saveSalesDriveProductImages_(orders){
   let updated=0;
   withImage.forEach(item=>{
     const row=byKey.get(String(item.salesDriveId)+'|'+normalizeTrackingNumber_(item.ttn));
-    if(!row||row.productImage) return;
-    sh.getRange(row.rowNumber,col).setValue(String(item.productImage));
+    if(!row) return;
+    const current=String(row.productImage||'').trim();
+    if(current&&salesDriveStableImageUrl_(current)) return;
+    const source=String(item.productImage||current||'').trim();
+    if(!source) return;
+    const stable=salesDrivePersistProductImage_(source,row.id||item.salesDriveId);
+    const next=stable||current||source;
+    if(!next||next===current) return;
+    sh.getRange(row.rowNumber,col).setValue(next);
+    row.productImage=next;
     updated++;
   });
   return updated;
+}
+
+function salesDriveStableImageUrl_(url){
+  const value=String(url||'').trim();
+  if(!value) return false;
+  if(/^data:image\//i.test(value)) return true;
+  return /(?:drive\.google\.com\/uc|drive\.usercontent\.google\.com|lh3\.googleusercontent\.com\/d\/)/i.test(value);
+}
+
+function salesDrivePersistProductImage_(imageUrl,rowId){
+  const raw=String(imageUrl||'').trim();
+  if(!raw) return '';
+  if(salesDriveStableImageUrl_(raw)) return raw;
+  if(!/^https?:\/\//i.test(raw)) return '';
+  try{
+    const response=UrlFetchApp.fetch(raw,{method:'get',muteHttpExceptions:true,followRedirects:true,headers:{'User-Agent':'Mozilla/5.0','Accept':'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'}});
+    const code=response.getResponseCode();
+    if(code<200||code>=300) return '';
+    const blob=response.getBlob();
+    const mime=String(blob.getContentType()||'').toLowerCase();
+    if(!/^image\//i.test(mime)) return '';
+    const bytes=blob.getBytes();
+    if(!bytes.length||bytes.length>5*1024*1024) return '';
+    const ext=mime.indexOf('png')>=0?'png':(mime.indexOf('webp')>=0?'webp':(mime.indexOf('gif')>=0?'gif':'jpg'));
+    const folder=getReturnImagesFolder_();
+    const safeId=String(rowId||Utilities.getUuid()).replace(/[^A-Za-z0-9_-]+/g,'-').slice(0,80);
+    const file=folder.createFile(Utilities.newBlob(bytes,mime,'salesdrive-'+safeId+'-'+Date.now()+'.'+ext));
+    try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(_){ }
+    return 'https://drive.google.com/uc?export=view&id='+file.getId();
+  }catch(_){
+    return '';
+  }
 }
 
 function preserveKnownSeparateReturnLegs_(items){
