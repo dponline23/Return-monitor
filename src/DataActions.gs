@@ -298,7 +298,20 @@ function apiGetProductImageData(imageUrl){
   if(!raw) return '';
   let m=raw.match(/[?&]id=([A-Za-z0-9_-]{10,})/i);
   if(!m) m=raw.match(/\/d\/([A-Za-z0-9_-]{10,})/i);
-  if(!m) return '';
+  if(!m){
+    if(!/^https?:\/\//i.test(raw)) return '';
+    try{
+      const response=UrlFetchApp.fetch(raw,{method:'get',muteHttpExceptions:true,followRedirects:true,headers:{'User-Agent':'Mozilla/5.0','Accept':'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'}});
+      const code=response.getResponseCode();
+      if(code<200||code>=300) return '';
+      const blob=response.getBlob();
+      const mime=String(blob.getContentType()||'').toLowerCase();
+      if(!/^image\//.test(mime)) return '';
+      const bytes=blob.getBytes();
+      if(bytes.length>5*1024*1024) return '';
+      return 'data:'+mime+';base64,'+Utilities.base64Encode(bytes);
+    }catch(_){ return ''; }
+  }
   try{
     const file=DriveApp.getFileById(m[1]);
     let blob=null;
