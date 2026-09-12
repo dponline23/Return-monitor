@@ -66,6 +66,7 @@ function include_(name){
 .refPickupBox .refPickupIcon svg{display:block!important;margin:0!important}
 .rmTrackingLink,.compactCardReturnTtn{cursor:pointer!important}
 .rmTrackingLink strong,.compactCardReturnTtn strong{color:#1769d7!important;text-decoration:underline!important;text-decoration-thickness:1px!important;text-underline-offset:2px!important}
+.compactCardReturnTtn{text-decoration:none!important}
 
 @media(max-width:760px){
   .dashboardHero{overflow:visible!important;margin-bottom:9px!important}
@@ -270,9 +271,14 @@ document.addEventListener('DOMContentLoaded',function(){
   if(typeof baseMobileCardHtml!=='function')return;
   window.mobileCardHtml=function(row){
     var html=baseMobileCardHtml(row);
-    var ttn=row&&row.returnTtn
-      ? '<span class="compactCardReturnTtn"><span class="compactCardTtnIcon">↩</span><span class="compactCardTtnLabel">ТТН</span><strong>'+esc(row.returnTtn)+'</strong></span>'
-      : '<span class="compactCardTtnEmpty"></span>';
+    var ttn='<span class="compactCardTtnEmpty"></span>';
+    if(row&&row.returnTtn){
+      var url=rmTrackingUrl_(row.returnTtn);
+      var inner='<span class="compactCardTtnIcon">↩</span><span class="compactCardTtnLabel">ТТН</span><strong>'+esc(row.returnTtn)+'</strong>';
+      ttn=url
+        ? '<a class="compactCardReturnTtn" href="'+attr(url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" ontouchstart="event.stopPropagation()">'+inner+'</a>'
+        : '<span class="compactCardReturnTtn">'+inner+'</span>';
+    }
     var marker='<div class="compactCardMeta">';
     var start=html.indexOf(marker);
     if(start<0)return html;
@@ -374,15 +380,9 @@ function rmMarkTrackingLinks_(){
   });
 }
 document.addEventListener('click',function(event){
-  var target=event.target&&event.target.closest?event.target.closest('.compactCardReturnTtn,.rmTrackingLink'):null;
+  var target=event.target&&event.target.closest?event.target.closest('.rmTrackingLink'):null;
   if(!target)return;
-  var ttn='';
-  if(target.classList.contains('compactCardReturnTtn')){
-    var strong=target.querySelector('strong');
-    ttn=strong?strong.textContent:'';
-  }else{
-    ttn=target.dataset.ttn||target.textContent||'';
-  }
+  var ttn=target.dataset.ttn||target.textContent||'';
   var url=rmTrackingUrl_(ttn);
   if(!url)return;
   event.preventDefault();
