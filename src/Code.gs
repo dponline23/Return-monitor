@@ -64,6 +64,8 @@ function include_(name){
 .refProductInner img{object-fit:contain!important;object-position:center!important;background:#fff!important;padding:3px!important}
 .refPickupBox .refPickupIcon{display:grid!important;place-items:center!important;line-height:0!important}
 .refPickupBox .refPickupIcon svg{display:block!important;margin:0!important}
+.rmTrackingLink,.compactCardReturnTtn{cursor:pointer!important}
+.rmTrackingLink strong,.compactCardReturnTtn strong{color:#1769d7!important;text-decoration:underline!important;text-decoration-thickness:1px!important;text-underline-offset:2px!important}
 
 @media(max-width:760px){
   .dashboardHero{overflow:visible!important;margin-bottom:9px!important}
@@ -115,7 +117,7 @@ function include_(name){
     color:#087a3d!important;
     box-shadow:0 4px 10px rgba(16,24,40,.035)!important;
   }
-  .dashboardHero .heroAddIcon{
+  html body .dashboardHero .heroAdd .heroAddIcon{
     width:28px!important;
     height:28px!important;
     border-radius:9px!important;
@@ -124,8 +126,8 @@ function include_(name){
     display:grid!important;
     place-items:center!important;
     flex:0 0 28px!important;
+    transform:translateX(-70%)!important;
   }
-  .dashboardHero .heroAdd .heroAddIcon{transform:translateX(-7px)!important}
   .dashboardHero .heroAddIcon svg{width:16px!important;height:16px!important;fill:none!important;stroke:currentColor!important;stroke-width:2.2!important;stroke-linecap:round!important}
   .dashboardHero .heroSettings .heroBtnIcon{font-size:16px!important}
 
@@ -139,7 +141,10 @@ function include_(name){
     gap:8px!important;
     border-radius:14px!important;
   }
-  .heroStats .statIcon{width:34px!important;height:34px!important;border-radius:10px!important;font-size:15px!important}
+  .heroStats .statIcon{width:34px!important;height:34px!important;border-radius:10px!important;font-size:15px!important;display:grid!important;place-items:center!important;line-height:0!important}
+  .heroStats .statIcon svg{display:block!important;width:19px!important;height:19px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.85!important;stroke-linecap:round!important;stroke-linejoin:round!important;margin:0!important}
+  .heroStats .statWaitingCard .statIcon svg{width:23px!important;height:23px!important;stroke-width:1.9!important}
+  .heroStats .statAmountCard .statIcon svg{width:20px!important;height:20px!important}
   .heroStats .statValue{font-size:22px!important;margin:1px 0 4px!important}
   .heroStats .statLabel{font-size:11px!important;line-height:1.2!important}
   .heroStats .statChevron{display:none!important}
@@ -251,6 +256,13 @@ document.addEventListener('DOMContentLoaded',function(){
   if(add){
     add.innerHTML='<span class="heroAddIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg></span><span>Додати</span>';
   }
+
+  var totalIcon=document.querySelector('.statTotalCard .statIcon');
+  if(totalIcon) totalIcon.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7.5 12 4l7 3.5v8L12 20l-7-4.5Z"></path><path d="m5 7.5 7 4 7-4M12 11.5V20"></path><path d="M9 14.5H6.5V12"></path><path d="M6.5 14.5a4.8 4.8 0 0 0 4 2.4"></path></svg>';
+  var waitingIcon=document.querySelector('.statWaitingCard .statIcon');
+  if(waitingIcon) waitingIcon.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5v5l3.5 2"></path></svg>';
+  var amountIcon=document.querySelector('.statAmountCard .statIcon');
+  if(amountIcon) amountIcon.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle><path d="M6 9h.01M18 15h.01"></path></svg>';
 });
 
 document.addEventListener('DOMContentLoaded',function(){
@@ -323,6 +335,70 @@ window.addEventListener('load',function(){
     area.remove();
     done();
   };
+});
+
+function rmNormalizeTtn_(value){
+  return String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+}
+function rmRowForTtn_(ttn){
+  var needle=rmNormalizeTtn_(ttn);
+  if(!needle||!window.model)return null;
+  return (model.rows||[]).find(function(row){
+    return [row.returnTtn,row.originalTtn,row.ttn].some(function(value){return rmNormalizeTtn_(value)===needle;});
+  })||null;
+}
+function rmTrackingUrl_(ttn){
+  var n=rmNormalizeTtn_(ttn);
+  if(!n)return '';
+  var row=rmRowForTtn_(n);
+  var carrier=String(row&&row.carrier||'').toLowerCase();
+  if(/нова|novaposhta|nova post/.test(carrier)||/^\d{14}$/.test(n)) return 'https://novaposhta.ua/tracking/'+encodeURIComponent(n);
+  if(/укр|ukrposhta/.test(carrier)||/^0(?:42|50)\d{10}$/.test(n)||/^(?:42|50)\d{10}$/.test(n)){
+    if(/^(?:42|50)\d{10}$/.test(n)) n='0'+n;
+    return 'https://track.ukrposhta.ua/tracking_UA.html?barcode='+encodeURIComponent(n);
+  }
+  return '';
+}
+function rmMarkTrackingLinks_(){
+  document.querySelectorAll('#drawerBody .refRow').forEach(function(row){
+    var label=row.querySelector('.refRowLabel');
+    var value=row.querySelector('.refRowValue');
+    if(!label||!value)return;
+    var text=String(label.textContent||'').trim();
+    if(text!=='Першочергова ТТН'&&text!=='ТТН повернення')return;
+    var ttn=String(value.textContent||'').trim();
+    if(!ttn||ttn==='—')return;
+    value.classList.add('rmTrackingLink');
+    value.dataset.ttn=ttn;
+    value.title='Відкрити відстеження';
+  });
+}
+document.addEventListener('click',function(event){
+  var target=event.target&&event.target.closest?event.target.closest('.compactCardReturnTtn,.rmTrackingLink'):null;
+  if(!target)return;
+  var ttn='';
+  if(target.classList.contains('compactCardReturnTtn')){
+    var strong=target.querySelector('strong');
+    ttn=strong?strong.textContent:'';
+  }else{
+    ttn=target.dataset.ttn||target.textContent||'';
+  }
+  var url=rmTrackingUrl_(ttn);
+  if(!url)return;
+  event.preventDefault();
+  event.stopPropagation();
+  window.open(url,'_blank','noopener');
+},true);
+window.addEventListener('load',function(){
+  setTimeout(function(){
+    var finalRender=window.renderDetails;
+    if(typeof finalRender==='function'&&!finalRender.__rmTrackingWrapped){
+      var wrapped=function(){finalRender();rmMarkTrackingLinks_();};
+      wrapped.__rmTrackingWrapped=true;
+      window.renderDetails=wrapped;
+    }
+    rmMarkTrackingLinks_();
+  },0);
 });
 
 function rmCarrierTab(tab){
