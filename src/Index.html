@@ -226,10 +226,16 @@ function hydrateDetailProductImage(imageUrl){
   const raw=String(imageUrl||'').trim();
   if(!shell||!raw)return;
 
-  function placeholder(){
-    if(!shell||!shell.isConnected)return;
+  const loaded=window.__detailImageNode;
+  if(loaded &&
+     String(loaded.dataset.original||'').trim()===raw &&
+     loaded.complete && loaded.naturalWidth>0){
+    loaded.className='detailProductImage';
+    loaded.removeAttribute('loading');
     shell.classList.remove('loading');
-    shell.innerHTML='<div class="detailImagePlaceholder">▧</div>';
+    shell.replaceChildren(loaded);
+    window.__detailImageNode=null;
+    return;
   }
 
   function directFallback(){
