@@ -383,6 +383,19 @@ function rmMarkTrackingLinks_(){
   });
 }
 document.addEventListener('click',function(event){
+  var link=event.target&&event.target.closest?event.target.closest('.compactCardReturnTtn'):null;
+  if(!link)return;
+  var href=link.getAttribute('href')||'';
+  if(!href){
+    var strong=link.querySelector('strong');
+    href=rmTrackingUrl_(strong?strong.textContent:'');
+  }
+  if(!href)return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  window.open(href,'_blank','noopener');
+},true);
+document.addEventListener('click',function(event){
   var target=event.target&&event.target.closest?event.target.closest('.rmTrackingLink'):null;
   if(!target)return;
   var ttn=target.dataset.ttn||target.textContent||'';
