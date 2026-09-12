@@ -50,6 +50,11 @@ function include_(name){
   .detailsDrawer.refDetails{width:min(680px,48vw)!important;max-width:680px!important}
   .tableRow{grid-template-columns:125px 145px 160px minmax(290px,2fr) 145px 145px 150px 100px 112px 46px!important;min-width:1140px!important}
   .tableRow>.checkCell{display:none!important}
+  .tableHead>div,.dataRow>div{justify-self:center!important;text-align:center!important}
+  .tableHead .right,.dataRow .right{text-align:center!important}
+  .dataRow .productMini{justify-content:center!important}
+  .dataRow .productMini>div{text-align:left!important}
+  .dataRow .actionsCell{justify-content:center!important}
   .heroStats .statChevron{display:none!important}
   .statCard{min-height:96px!important;padding:14px 16px!important}
 }
