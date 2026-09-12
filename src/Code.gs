@@ -59,16 +59,130 @@ function include_(name){
   .statCard{min-height:96px!important;padding:14px 16px!important}
 }
 @media(max-width:760px){
-  .dashboardHero{overflow:visible!important}
+  .dashboardHero{overflow:visible!important;margin-bottom:9px!important}
   .heroCopy h1 span{display:block!important}
   .heroSetup{margin-left:-82px!important;width:calc(100% + 82px)!important;max-width:none!important}
-  .periodSyncCard{width:100%!important}
-  .heroSettings,.heroAdd{min-width:0!important}
-  .heroStats .statCard{position:relative!important}
+
+  .dashboardHero .heroActions{
+    grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr)!important;
+    gap:8px!important;
+    margin-top:8px!important;
+  }
+  .dashboardHero .periodSyncCard{
+    width:100%!important;
+    min-height:60px!important;
+    border-radius:15px!important;
+  }
+  .dashboardHero .periodSyncCard::before{margin:10px 0!important}
+  .dashboardHero .heroPeriod{
+    min-height:60px!important;
+    grid-template-columns:31px minmax(0,1fr)!important;
+    gap:7px!important;
+    padding:7px 10px!important;
+    border-radius:15px 0 0 15px!important;
+  }
+  .dashboardHero .heroActionIcon{width:31px!important;height:31px!important}
+  .dashboardHero .heroActionIcon svg{width:27px!important;height:27px!important}
+  .dashboardHero .heroPeriodText small{font-size:9.5px!important;line-height:1!important;margin-bottom:2px!important}
+  .dashboardHero .heroPeriodText strong{font-size:16px!important;line-height:1.05!important}
+  .dashboardHero .heroSync{
+    min-height:60px!important;
+    padding:6px 8px!important;
+    border-radius:0 15px 15px 0!important;
+    font-size:10.5px!important;
+  }
+  .dashboardHero .heroSyncIcon{font-size:24px!important;line-height:1!important}
+  .dashboardHero .heroSettings,.dashboardHero .heroAdd{
+    height:44px!important;
+    min-height:44px!important;
+    border-radius:13px!important;
+    font-size:13.5px!important;
+    gap:7px!important;
+  }
+  .dashboardHero .heroSettings{background:#fff!important;border:1px solid #e4e7ec!important}
+  .dashboardHero .heroAdd{
+    background:linear-gradient(135deg,#0a8f49,#087a3d)!important;
+    border-color:#087a3d!important;
+    box-shadow:0 5px 12px rgba(8,122,61,.16)!important;
+  }
+  .dashboardHero .heroAdd .heroPlus{
+    display:grid!important;
+    place-items:center!important;
+    width:24px!important;
+    height:24px!important;
+    border-radius:50%!important;
+    background:rgba(255,255,255,.16)!important;
+    font-size:18px!important;
+    line-height:1!important;
+  }
+  .dashboardHero .heroSettings .heroBtnIcon{font-size:16px!important}
+
+  .heroStats{gap:7px!important;margin-bottom:10px!important}
+  .heroStats .statCard{
+    position:relative!important;
+    min-height:82px!important;
+    padding:9px 10px!important;
+    gap:8px!important;
+    border-radius:14px!important;
+  }
+  .heroStats .statIcon{width:34px!important;height:34px!important;border-radius:10px!important;font-size:15px!important}
+  .heroStats .statValue{font-size:22px!important;margin:1px 0 4px!important}
+  .heroStats .statLabel{font-size:11px!important;line-height:1.2!important}
   .heroStats .statChevron{display:none!important}
+
+  .compactCardProduct{grid-template-columns:54px minmax(0,1fr)!important;gap:10px!important}
+  .compactCardPhoto{
+    width:54px!important;
+    height:54px!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    padding:2px!important;
+    background:#fff!important;
+  }
+  .compactCardMeta{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    align-items:end!important;
+    gap:10px!important;
+    margin-top:8px!important;
+    padding-top:7px!important;
+    text-align:initial!important;
+  }
+  .compactCardReturnTtn{
+    min-width:0!important;
+    display:inline-flex!important;
+    align-items:center!important;
+    gap:4px!important;
+    justify-self:start!important;
+    align-self:end!important;
+    color:#344054!important;
+    font-size:11.5px!important;
+    line-height:1.2!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+  .compactCardReturnTtn strong{font-weight:750!important;overflow:hidden!important;text-overflow:ellipsis!important}
+  .compactCardTtnIcon{color:#087a3d!important;font-size:13px!important;font-weight:800!important}
+  .compactCardTtnLabel{color:#98a2b3!important;font-size:10px!important;font-weight:750!important;text-transform:uppercase!important;letter-spacing:.03em!important}
+  .compactCardTtnEmpty{display:block!important;min-width:0!important}
+  .compactCardMetaRight{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:flex-end!important;
+    gap:2px!important;
+    min-width:0!important;
+    text-align:right!important;
+  }
+  .compactCardSupplierBottom,.compactCardDateBottom{display:block!important;text-align:right!important}
 }
 @media(max-width:390px){
   .heroSetup{margin-left:-71px!important;width:calc(100% + 71px)!important}
+  .dashboardHero .periodSyncCard,.dashboardHero .heroPeriod,.dashboardHero .heroSync{min-height:57px!important}
+  .dashboardHero .heroSettings,.dashboardHero .heroAdd{height:42px!important;min-height:42px!important;font-size:13px!important}
+  .heroStats .statCard{min-height:78px!important;padding:8px 9px!important}
+  .compactCardProduct{grid-template-columns:52px minmax(0,1fr)!important}
+  .compactCardPhoto{width:52px!important;height:52px!important}
 }
 .carrierApiState{margin:12px 0;padding:11px 12px;border:1px solid #e4e7ec;border-radius:11px;background:#f8fafb;color:#667085;font-size:12px}
 .carrierApiState.ok{background:#f2fbf5;border-color:#ccebd7;color:#117a42}
@@ -104,6 +218,26 @@ document.addEventListener('DOMContentLoaded',function(){
   var oldOpen=window.openSettings;
   window.openSettings=function(){if(oldOpen)oldOpen();refreshCarrierApiState();};
   refreshCarrierApiState();
+});
+
+document.addEventListener('DOMContentLoaded',function(){
+  var baseMobileCardHtml=window.mobileCardHtml;
+  if(typeof baseMobileCardHtml!=='function')return;
+  window.mobileCardHtml=function(row){
+    var html=baseMobileCardHtml(row);
+    var ttn=row&&row.returnTtn
+      ? '<span class="compactCardReturnTtn"><span class="compactCardTtnIcon">↩</span><span class="compactCardTtnLabel">ТТН</span><strong>'+esc(row.returnTtn)+'</strong></span>'
+      : '<span class="compactCardTtnEmpty"></span>';
+    var marker='<div class="compactCardMeta">';
+    var start=html.indexOf(marker);
+    if(start<0)return html;
+    var innerStart=start+marker.length;
+    var end=html.indexOf('</div>',innerStart);
+    if(end<0)return html;
+    var inner=html.slice(innerStart,end);
+    return html.slice(0,start)+marker+ttn+'<span class="compactCardMetaRight">'+inner+'</span>'+html.slice(end);
+  };
+  if(window.innerWidth<=760&&typeof window.renderRows==='function')window.renderRows();
 });
 
 function rmCarrierTab(tab){
