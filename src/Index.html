@@ -385,5 +385,134 @@ function toast(text){const el=document.getElementById('toast');el.textContent=te
 function setBusy(show,text){document.getElementById('busyText').textContent=text||'Завантаження…';document.getElementById('busyOverlay').classList.toggle('show',Boolean(show));}
 loadData();
 </script>
+
+<style id="finalMobileFixesV1">
+.detailsDrawer.refDetails .refMore{display:none!important}
+.refProductInner img{object-fit:contain!important;object-position:center!important;background:#fff!important;padding:3px!important}
+.refPickupBox .refPickupIcon{display:grid!important;place-items:center!important;line-height:0!important}
+.refPickupBox .refPickupIcon svg{display:block!important;margin:0!important}
+@media(max-width:760px){
+  .dashboardHero .heroActions{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:8px!important}
+  .dashboardHero .heroActions>.heroSettings,.dashboardHero .heroActions>.heroAdd{width:100%!important;max-width:none!important;min-width:0!important}
+  .dashboardHero .heroAdd{background:#eef9f2!important;border:1px solid #c9e9d5!important;color:#087a3d!important;justify-content:center!important}
+  .dashboardHero .heroAddIcon{display:grid!important;place-items:center!important;width:28px!important;height:28px!important;flex:0 0 28px!important;border-radius:9px!important;background:#087a3d!important;color:#fff!important;transform:translate(-7px,2px)!important}
+  .dashboardHero .heroAddIcon svg{width:16px!important;height:16px!important;fill:none!important;stroke:currentColor!important;stroke-width:2.2!important;stroke-linecap:round!important}
+  .dashboardHero .heroPeriod{grid-template-columns:31px minmax(0,1fr) 16px!important}
+  .dashboardHero .periodChevronSvg{display:grid!important;place-items:center!important;width:16px!important;height:16px!important;color:#667085!important}
+  .dashboardHero .periodChevronSvg svg{width:13px!important;height:13px!important;fill:none!important;stroke:currentColor!important;stroke-width:2.1!important;stroke-linecap:round!important;stroke-linejoin:round!important}
+  .compactCardMeta{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:end!important;gap:10px!important;flex-direction:initial!important;text-align:initial!important}
+  .compactCardReturnTtn{display:inline-flex!important;align-items:center!important;gap:5px!important;min-width:0!important;justify-self:start!important;color:#344054!important;font-size:11px!important;line-height:1.2!important;white-space:nowrap!important;overflow:hidden!important}
+  .compactCardReturnTtn svg{width:14px!important;height:14px!important;flex:0 0 14px!important;fill:none!important;stroke:#087a3d!important;stroke-width:1.8!important;stroke-linecap:round!important;stroke-linejoin:round!important}
+  .compactCardReturnTtn strong{font-weight:750!important;overflow:hidden!important;text-overflow:ellipsis!important}
+  .compactCardTtnLabel{font-size:10px!important;color:#98a2b3!important;font-weight:750!important}
+  .compactCardTtnEmpty{display:block!important;min-width:0!important}
+  .compactCardMetaRight{display:flex!important;flex-direction:column!important;align-items:flex-end!important;gap:2px!important;min-width:0!important;text-align:right!important}
+  .compactCardMetaRight .compactCardSupplierBottom,.compactCardMetaRight .compactCardDateBottom{display:block!important;text-align:right!important;max-width:100%!important}
+}
+</style>
+<script>
+window.addEventListener('load',function(){
+  const periodText=document.querySelector('.heroPeriodText');
+  const periodBox=document.querySelector('.heroPeriod');
+  if(periodText){periodText.innerHTML='<small>Період</small><strong>За період</strong>';}
+  if(periodBox&&!periodBox.querySelector('.periodChevronSvg')){
+    const chevron=document.createElement('span');
+    chevron.className='periodChevronSvg';
+    chevron.setAttribute('aria-hidden','true');
+    chevron.innerHTML='<svg viewBox="0 0 20 20"><path d="m5 7 5 6 5-6"/></svg>';
+    const inputs=periodBox.querySelector('.periodInputs');
+    if(inputs)periodBox.insertBefore(chevron,inputs);else periodBox.appendChild(chevron);
+  }
+
+  const plus=document.querySelector('.heroAdd .heroPlus');
+  if(plus){
+    plus.className='heroAddIcon';
+    plus.setAttribute('aria-hidden','true');
+    plus.innerHTML='<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
+  }
+
+  window.renderSetup=function(){
+    const s=model.setup||{},active=[];
+    if(s.salesDrive)active.push('SalesDrive');
+    if(s.novaPoshta)active.push('НП');
+    if(s.ukrposhta)active.push('Укрпошта');
+    if(s.prom)active.push('Prom');
+    const el=document.getElementById('setupLine');
+    if(!el)return;
+    const desktopSuffix=window.innerWidth<=760?'':' <b>·</b> автооновлення щогодини';
+    el.innerHTML=active.length
+      ?'<span class="setupLinkIcon">↗</span><span>Підключено: '+active.map(x=>'<strong>'+esc(x)+'</strong>').join(' · ')+desktopSuffix+'</span>'
+      :'<span class="setupLinkIcon">↗</span><span>API ще не налаштовані · ручні повернення доступні</span>';
+  };
+  window.renderSetup();
+
+  window.mobileCardHtml=function(row){
+    const image=row.productImage?productImageTag(row.productImage,'compactCardPhoto'):'<span class="compactCardPhoto compactCardPlaceholder">▧</span>';
+    const supplier=esc(row.supplierName||'Постачальник не вказаний');
+    const notified=row.supplierNotified?'<span class="compactNotified" title="Постачальника сповіщено">✓</span>':'';
+    const ttn=row.returnTtn
+      ?`<span class="compactCardReturnTtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H5v4"/><path d="M5.5 10.5A8 8 0 1 1 7 18"/></svg><span class="compactCardTtnLabel">ТТН</span><strong>${esc(row.returnTtn)}</strong></span>`
+      :'<span class="compactCardTtnEmpty"></span>';
+    return `<article class="returnCard compactCardV2" onclick="openDetails('${jsq(row.id)}')">
+      <div class="compactCardHead">
+        <div class="compactCardIdentity"><strong class="compactCardRtn">${esc(compactReturnNumber(row.returnNumber))}</strong></div>
+        <strong class="compactCardAmount">${money(row.amount)}</strong>
+      </div>
+      ${(row.productName||row.productImage)?`<div class="compactCardProduct">${image}<div class="compactCardProductName">${esc(row.productName||'Товар')}</div></div>`:''}
+      <div class="compactCardBadges"><span class="reasonPill">${esc(reasonLabel(row.returnReason,row.returnReasonComment)||'Причина не вказана')}</span>${statusBadge(row.returnStatus)}${pickupBadge(row.supplierPickupStatus)}</div>
+      <div class="compactCardMeta">${ttn}<span class="compactCardMetaRight"><span class="compactCardSupplierBottom">${supplier}${notified}</span><span class="compactCardDateBottom">${fmtDateTimeShort(row.returnDate||row.arrivedAt||row.returnStartedAt)}</span></span></div>
+    </article>`;
+  };
+
+  window.copySupplierData=async function(id){
+    const row=(model.rows||[]).find(item=>item.id===id);if(!row)return;
+    const statusItem=(model.config.returnStatuses||[]).find(x=>x.id===row.returnStatus);
+    const pickupItem=(model.config.pickupStatuses||[]).find(x=>x.id===row.supplierPickupStatus);
+    const pickupLabel=row.supplierPickedUp?'Забрано постачальником':(pickupItem?pickupItem.label:'—');
+    const supplierOrder=[row.supplierOrderNumber?('#'+row.supplierOrderNumber):'',row.supplierOrderUrl||''].filter(Boolean).join(' ');
+    const text=[
+      'Повернення '+(row.returnNumber||'—'),
+      '',
+      'Постачальник: '+(row.supplierName||'—'),
+      'Замовлення джерела: '+(row.orderNumber?('#'+row.orderNumber):'—'),
+      'Товар: '+(row.productName||'—'),
+      '',
+      'Причина: '+(reasonLabel(row.returnReason,row.returnReasonComment)||'—'),
+      'Статус повернення: '+(statusItem?statusItem.label:'—'),
+      'Забір постачальником: '+pickupLabel,
+      '',
+      'Першочергова ТТН: '+(row.originalTtn||row.ttn||'—'),
+      'ТТН повернення: '+(row.returnTtn||'—'),
+      'Замовлення на сайті постачальника: '+(supplierOrder||'—'),
+      '',
+      'Сума: '+money(row.amount),
+      'Дата повернення: '+fmtDateTimeShort(row.returnDate||row.arrivedAt||row.returnStartedAt)
+    ].join('\n');
+    try{
+      if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(text);
+      else throw new Error('clipboard unavailable');
+    }catch(_){
+      const area=document.createElement('textarea');area.value=text;area.setAttribute('readonly','');area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();document.execCommand('copy');area.remove();
+    }
+    toast('Знімок повернення скопійовано');
+  };
+
+  const activeRenderDetails=window.renderDetails;
+  if(typeof activeRenderDetails==='function'){
+    window.renderDetails=function(){
+      activeRenderDetails();
+      const more=document.querySelector('.detailsDrawer.refDetails .refMore');
+      if(more)more.remove();
+      const copyBtn=document.querySelector('#drawerBody .refCopyAll');
+      if(copyBtn){
+        const icon=copyBtn.querySelector('svg');
+        copyBtn.innerHTML=(icon?icon.outerHTML:'')+'<span>Знімок повернення</span>';
+      }
+    };
+  }
+
+  if(typeof window.renderRows==='function')window.renderRows();
+});
+</script>
 </body>
 </html>
