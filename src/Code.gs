@@ -52,8 +52,10 @@ function include_(name){
   .tableRow>.checkCell{display:none!important}
   .tableHead>div,.dataRow>div{justify-self:center!important;text-align:center!important}
   .tableHead .right,.dataRow .right{text-align:center!important}
-  .dataRow .productMini{justify-content:center!important}
-  .dataRow .productMini>div{text-align:left!important}
+  .dataRow>div:nth-child(5){min-width:0!important;max-width:100%!important;overflow:hidden!important}
+  .dataRow .productMini{width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important;justify-content:flex-start!important}
+  .dataRow .productMini>div{flex:1 1 auto!important;min-width:0!important;max-width:100%!important;overflow:hidden!important;text-align:left!important}
+  .dataRow .productMini strong{display:block!important;width:100%!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
   .dataRow .actionsCell{justify-content:center!important}
   .heroStats .statChevron{display:none!important}
   .statCard{min-height:96px!important;padding:14px 16px!important}
