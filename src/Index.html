@@ -289,6 +289,18 @@ function pickupBadge(id){const item=(model.config.pickupStatuses||[]).find(x=>x.
 function pickupCell(row){return `<div>${pickupBadge(row.supplierPickupStatus)}${row.supplierPickedUpAt?`<div class="cellMeta">${fmtDateTimeShort(row.supplierPickedUpAt)}</div>`:(row.daysWaiting?`<div class="cellMeta ${row.daysWaiting>=3?'dangerText':''}">${row.daysWaiting} дн. очікування</div>`:'')}</div>`;}
 function dateCell(value){return value?`<strong>${fmtDate(value)}</strong><div class="cellMeta">${fmtTime(value)}</div>`:'<span class="muted">—</span>';}
 
+function adoptLoadedDetailImage(row){
+  const loaded=window.__detailImageNode;
+  if(!row||!row.productImage||!loaded||!loaded.complete||loaded.naturalWidth<=0)return;
+  const raw=String(row.productImage||'').trim();
+  if(String(loaded.dataset.original||'').trim()!==raw)return;
+  const target=document.querySelector('#drawerBody .refProductInner img');
+  if(!target)return;
+  loaded.className='';
+  loaded.removeAttribute('loading');
+  target.replaceWith(loaded);
+  window.__detailImageNode=null;
+}
 function openDetails(id){
   const row=(model.rows||[]).find(item=>item.id===id);
   window.__detailImageNode=null;
@@ -301,6 +313,7 @@ function openDetails(id){
   }
   selectedId=id;
   renderDetails();
+  adoptLoadedDetailImage(row);
   document.getElementById('drawerBackdrop').classList.add('open');
   const drawer=document.getElementById('detailsDrawer');
   drawer.classList.add('open');
