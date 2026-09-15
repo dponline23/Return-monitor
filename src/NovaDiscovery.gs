@@ -16,8 +16,6 @@ function discoverNovaPoshtaReturns_(){
     return (bd?bd.getTime():0)-(ad?ad.getTime():0);
   }).slice(0,180);
 
-  if(!rows.length) return {ok:true,checked:0,children:0,returnsFound:0,updated:0,imagesMirrored:imageMirror.updated||0};
-
   const parentNumbers=[];
   const seenParents=new Set();
   rows.forEach(row=>{
@@ -25,7 +23,7 @@ function discoverNovaPoshtaReturns_(){
     if(!n||seenParents.has(n)) return;
     seenParents.add(n);parentNumbers.push(n);
   });
-  const parentItems=novaPoshtaStatusBatch_(key,parentNumbers);
+  const parentItems=parentNumbers.length?novaPoshtaStatusBatch_(key,parentNumbers):[];
   const parentByNumber=novaStatusMap_(parentItems);
 
   const childNumbers=[];
@@ -96,22 +94,26 @@ function novaDiscoverEasyReturns_(apiKey,rows){
       const parent=normalizeTrackingNumber_(row.originalTtn||row.ttn||'');
       if(parent) parentRows.set(parent,row);
     });
-    if(!parentRows.size) return {ok:true,checkedIncoming:0,returnsFound:0,updated:0};
 
-    const recipientRefs=novaPoshtaOwnSenderRefs_(apiKey);
-    if(!recipientRefs.length) return {ok:true,checkedIncoming:0,returnsFound:0,updated:0,reason:'Sender refs not found'};
-
-    const incomingNumbers=novaPoshtaIncomingDocumentNumbers_(apiKey,recipientRefs,21);
-    if(!incomingNumbers.length) return {ok:true,checkedIncoming:0,returnsFound:0,updated:0,recipientRefs:recipientRefs.length};
+    const incomingNumbers=novaPoshtaIncomingDocumentNumbers_(apiKey,21);
+    if(!incomingNumbers.length) return {ok:true,checkedIncoming:0,returnsFound:0,updated:0};
 
     const statusItems=novaPoshtaStatusBatch_(apiKey,incomingNumbers);
-    let returnsFound=0,updated=0;
+    let returnsFound=0,updated=0,salesDriveLookups=0,salesDriveMatches=0;
     statusItems.forEach(item=>{
       const returnTtn=novaStatusNumber_(item);
       const originalTtn=normalizeTrackingNumber_(firstValue_(item,['LightReturnNumber','lightReturnNumber'])||'');
       if(!returnTtn||!originalTtn||returnTtn===originalTtn) return;
 
-      const row=parentRows.get(originalTtn);
+      let row=parentRows.get(originalTtn)||null;
+      if(!row){
+        salesDriveLookups++;
+        row=novaFindSalesDriveShipmentByTtn_(originalTtn);
+        if(row){
+          parentRows.set(originalTtn,row);
+          salesDriveMatches++;
+        }
+      }
       if(!row) return;
 
       const result=novaTrackingResultFromItem_(item,returnTtn,row);
@@ -122,15 +124,76 @@ function novaDiscoverEasyReturns_(apiKey,rows){
       if(!result.returnStartedAt){
         result.returnStartedAt=dateIso_(firstValue_(item,['DateCreated','DateScan','ScheduledDeliveryDate']))||row.returnStartedAt||new Date().toISOString();
       }
+
+      if(!row.rowNumber){
+        row=novaEnsureStoredSalesDriveReturn_(row,result);
+        if(!row) return;
+      }
+
       novaApplyDiscoveredReturn_(row,result);
       returnsFound++;updated++;
     });
 
-    return {ok:true,checkedIncoming:incomingNumbers.length,statusesChecked:statusItems.length,returnsFound:returnsFound,updated:updated,recipientRefs:recipientRefs.length};
+    return {ok:true,checkedIncoming:incomingNumbers.length,statusesChecked:statusItems.length,returnsFound:returnsFound,updated:updated,salesDriveLookups:salesDriveLookups,salesDriveMatches:salesDriveMatches};
   }catch(error){
     console.error('Nova Poshta Easy Return discovery error',error);
     return {ok:false,checkedIncoming:0,returnsFound:0,updated:0,error:error&&error.message?error.message:String(error)};
   }
+}
+
+function novaFindSalesDriveShipmentByTtn_(ttn){
+  const target=normalizeTrackingNumber_(ttn);
+  if(!target) return null;
+  try{
+    const state=getSalesDriveState_();
+    const p=PropertiesService.getScriptProperties();
+    const apiKey=p.getProperty(SALESDRIVE_CONFIG.apiKeyProperty)||'';
+    if(!apiKey) return null;
+
+    const now=new Date();
+    const fromDate=new Date(now.getTime()-Math.max(21,SALESDRIVE_CONFIG.regularLookbackDays||21)*86400000);
+    const toDate=new Date(now.getTime()+86400000);
+    const statusMap=salesDriveStatusMap_(state.subdomain,apiKey);
+
+    for(let page=1;page<=SALESDRIVE_CONFIG.maxPages;page++){
+      const payload=salesDriveRequestJson_(salesDriveOrdersUrl_(state.subdomain,page,fromDate,toDate),apiKey);
+      const rawRows=Array.isArray(payload&&payload.data)?payload.data:[];
+      for(let i=0;i<rawRows.length;i++){
+        const items=normalizeSalesDriveOrders_(rawRows[i],statusMap);
+        for(let j=0;j<items.length;j++){
+          if(normalizeTrackingNumber_(items[j].ttn)===target) return items[j];
+        }
+      }
+      if(rawRows.length<SALESDRIVE_CONFIG.pageSize) break;
+      Utilities.sleep(SALESDRIVE_CONFIG.throttleMs);
+    }
+  }catch(error){
+    console.error('Easy Return SalesDrive lookup error',target,error);
+  }
+  return null;
+}
+
+function novaEnsureStoredSalesDriveReturn_(candidate,result){
+  if(!candidate) return null;
+  if(candidate.rowNumber) return candidate;
+  const promoted=Object.assign({},candidate,{
+    isReturn:true,
+    originalTtn:result.originalTtn||candidate.originalTtn||candidate.ttn||'',
+    returnTtn:result.returnTtn||'',
+    returnStartedAt:result.returnStartedAt||candidate.returnStartedAt||'',
+    arrivedAt:result.arrivedAt||'',
+    deliveryStatus:result.statusText||candidate.deliveryStatus||'',
+    deliveryCode:result.statusCode||candidate.deliveryCode||'',
+    statusSource:result.source||'Нова Пошта',
+    carrier:'Нова Пошта'
+  });
+
+  upsertSalesDriveOrders_([promoted]);
+  try{saveSalesDriveProductImages_([promoted]);}catch(_){ }
+
+  const salesDriveId=String(promoted.salesDriveId||'');
+  const ttn=normalizeTrackingNumber_(promoted.ttn||'');
+  return readReturnRows_().find(row=>String(row.salesDriveId||'')===salesDriveId&&normalizeTrackingNumber_(row.ttn||'')===ttn)||null;
 }
 
 function novaPoshtaOwnSenderRefs_(apiKey){
@@ -148,7 +211,7 @@ function novaPoshtaOwnSenderRefs_(apiKey){
   return refs;
 }
 
-function novaPoshtaIncomingDocumentNumbers_(apiKey,recipientRefs,daysBack){
+function novaPoshtaIncomingDocumentNumbers_(apiKey,daysBack){
   const numbers=[];
   const seen=new Set();
   const now=new Date();
@@ -156,27 +219,52 @@ function novaPoshtaIncomingDocumentNumbers_(apiKey,recipientRefs,daysBack){
   const dateFrom=novaPoshtaApiDate_(from);
   const dateTo=novaPoshtaApiDate_(now);
 
-  (recipientRefs||[]).slice(0,10).forEach(recipientRef=>{
-    for(let page=1;page<=4&&numbers.length<320;page++){
-      const props={
-        RecipientRef:recipientRef,
-        DateTimeFrom:dateFrom,
-        DateTimeTo:dateTo,
-        Page:String(page),
-        OrderField:'DateTime',
-        OrderDirection:'DESC'
-      };
-      const json=novaPoshtaApiRequest_(apiKey,'InternetDocument','getDocumentList',props);
-      const data=Array.isArray(json.data)?json.data:[];
-      data.forEach(item=>{
-        const number=normalizeTrackingNumber_(firstValue_(item||{},['IntDocNumber','Number','DocumentNumber','TTN'])||'');
-        if(!number||seen.has(number)) return;
-        seen.add(number);numbers.push(number);
-      });
-      if(!data.length||data.length<100) break;
-    }
-  });
-  return numbers.slice(0,320);
+  const addDocuments=data=>{
+    (Array.isArray(data)?data:[]).forEach(item=>{
+      const number=normalizeTrackingNumber_(firstValue_(item||{},['IntDocNumber','Number','DocumentNumber','TTN'])||'');
+      if(!number||seen.has(number)) return;
+      seen.add(number);numbers.push(number);
+    });
+  };
+
+  for(let page=1;page<=8&&numbers.length<600;page++){
+    const props={
+      DateTimeFrom:dateFrom,
+      DateTimeTo:dateTo,
+      Page:String(page),
+      OrderField:'DateTime',
+      OrderDirection:'DESC'
+    };
+    const json=novaPoshtaApiRequest_(apiKey,'InternetDocument','getDocumentList',props);
+    const data=Array.isArray(json.data)?json.data:[];
+    addDocuments(data);
+    if(!data.length||data.length<100) break;
+  }
+
+  // Fallback for accounts where getDocumentList needs an explicit recipient ref.
+  // Exact LightReturnNumber matching below still prevents unrelated shipments.
+  if(numbers.length<600){
+    let refs=[];
+    try{refs=novaPoshtaOwnSenderRefs_(apiKey);}catch(_){refs=[];}
+    refs.slice(0,10).forEach(recipientRef=>{
+      for(let page=1;page<=3&&numbers.length<600;page++){
+        const props={
+          RecipientRef:recipientRef,
+          DateTimeFrom:dateFrom,
+          DateTimeTo:dateTo,
+          Page:String(page),
+          OrderField:'DateTime',
+          OrderDirection:'DESC'
+        };
+        const json=novaPoshtaApiRequest_(apiKey,'InternetDocument','getDocumentList',props);
+        const data=Array.isArray(json.data)?json.data:[];
+        addDocuments(data);
+        if(!data.length||data.length<100) break;
+      }
+    });
+  }
+
+  return numbers.slice(0,600);
 }
 
 function novaPoshtaApiDate_(value){
@@ -202,8 +290,8 @@ function novaPoshtaApiRequest_(apiKey,modelName,calledMethod,methodProperties){
 
 function novaApplyDiscoveredReturn_(row,result){
   // Old versions could mark the ORIGINAL outbound shipment as "supplier picked up"
-  // before the distinct 590... return EN was discovered. Repair only that stale
-  // case. Carrier delivery itself must NEVER set supplierPickedUp.
+  // before the distinct return EN was discovered. Repair only that stale case.
+  // Carrier delivery itself must NEVER set supplierPickedUp.
   if(result&&result.distinctReturnLeg&&row&&row.id){
     const fresh=findReturnByIdFast_(row.id);
     if(fresh){
