@@ -37,11 +37,28 @@ function discoverNovaPoshtaReturns_(){
   const childItems=novaPoshtaStatusBatch_(key,childNumbers);
   const childByNumber=novaStatusMap_(childItems);
 
-  let returnsFound=0,updated=0,redirections=0,ambiguous=0;
+  let returnsFound=0,updated=0,redirections=0,ambiguous=0,easyKnown=0;
   rows.forEach(row=>{
     const parentNumber=normalizeTrackingNumber_(row.originalTtn||row.ttn||'');
     const parent=parentByNumber.get(parentNumber);
     if(!parent) return;
+
+    // Easy Return is reported on the INCOMING return EW itself.
+    // LightReturnNumber contains the PRIMARY outbound EW.
+    const lightPrimary=normalizeTrackingNumber_(firstValue_(parent,['LightReturnNumber','lightReturnNumber'])||'');
+    if(lightPrimary&&lightPrimary!==parentNumber){
+      const result=novaTrackingResultFromItem_(parent,parentNumber,row);
+      result.isReturn=true;
+      result.originalTtn=lightPrimary;
+      result.returnTtn=parentNumber;
+      result.distinctReturnLeg=true;
+      if(!result.returnStartedAt){
+        result.returnStartedAt=dateIso_(firstValue_(parent,['DateCreated','DateScan','ScheduledDeliveryDate']))||row.returnStartedAt||new Date().toISOString();
+      }
+      novaApplyDiscoveredReturn_(row,result);
+      returnsFound++;updated++;easyKnown++;
+      return;
+    }
 
     const childNumber=normalizeTrackingNumber_(firstValue_(parent,['LastCreatedOnTheBasisNumber','lastCreatedOnTheBasisNumber'])||'');
     const child=childNumber?childByNumber.get(childNumber):null;
@@ -84,7 +101,7 @@ function discoverNovaPoshtaReturns_(){
   returnsFound+=Number(easyReturn&&easyReturn.returnsFound||0);
   updated+=Number(easyReturn&&easyReturn.updated||0);
 
-  return {ok:true,checked:parentNumbers.length,children:childNumbers.length,returnsFound:returnsFound,updated:updated,redirections:redirections,ambiguous:ambiguous,easyReturn:easyReturn,imagesMirrored:imageMirror.updated||0,imageErrors:imageMirror.errors||0};
+  return {ok:true,checked:parentNumbers.length,children:childNumbers.length,returnsFound:returnsFound,updated:updated,redirections:redirections,ambiguous:ambiguous,easyKnown:easyKnown,easyReturn:easyReturn,imagesMirrored:imageMirror.updated||0,imageErrors:imageMirror.errors||0};
 }
 
 function novaDiscoverEasyReturns_(apiKey,rows){
