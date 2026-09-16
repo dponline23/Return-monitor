@@ -75,7 +75,7 @@ function trackShipment_(carrier,ttn,context){
   if(/нова|novaposhta|nova post/.test(c)) return trackNovaPoshta_(normalized,context);
   if(/укр|ukrposhta/.test(c)) return trackUkrposhta_(normalized,context);
   if(/meest|міст/.test(c)) return trackTemplateProvider_('Meest','MEEST_TRACKING_URL_TEMPLATE','MEEST_TRACKING_TOKEN',normalized);
-  if(/rozetka|розетка/.test(c)) return {skipped:true,source:'Rozetka',reason:'Rozetka tracking adapter pending'};
+  if(/rozetka|розетка/.test(c)) return trackRozetkaDelivery_(normalized,context);
   return {skipped:true,source:inferred||'Unknown',reason:'Unknown carrier'};
 }
 
@@ -202,6 +202,117 @@ function trackUkrposhta_(ttn,context){
     returnTtn:isReturn?queried:'',
     raw:{latest:latest,history:history}
   };
+}
+
+function trackRozetkaDelivery_(ttn,context){
+  const queried=String(ttn||'').trim();
+  if(!queried) return {skipped:true,source:'Rozetka Delivery',reason:'Tracking number missing'};
+
+  const url='https://rozetka.delivery/tracking/parcel?parcel_id='+encodeURIComponent(queried);
+  const response=UrlFetchApp.fetch(url,{
+    method:'get',
+    muteHttpExceptions:true,
+    followRedirects:true,
+    headers:{
+      Accept:'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
+      'Accept-Language':'uk-UA,uk;q=0.9',
+      'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/152 Safari/537.36'
+    }
+  });
+  const httpCode=response.getResponseCode();
+  const html=response.getContentText('UTF-8');
+  if(httpCode<200||httpCode>=300){
+    throw new Error('Rozetka Delivery HTTP '+httpCode+': '+String(html||'').replace(/\s+/g,' ').slice(0,180));
+  }
+
+  const text=rozetkaTrackingText_(html);
+  if(!text) return {skipped:true,source:'Rozetka Delivery',reason:'Empty tracking page'};
+
+  const knownReturn=Boolean(context&&context.returnNumber);
+  const returnedAtEvent=rozetkaTrackingEventDate_(text,['Повернуто']);
+  const waitingSenderAt=rozetkaTrackingEventDate_(text,['Очікує відправника']);
+  const returnBranchAt=rozetkaTrackingEventDate_(text,['У відділенні повернення']);
+  const returningAt=rozetkaTrackingEventDate_(text,['Повертається']);
+  const returnCreatedAt=rozetkaTrackingEventDate_(text,['Оформлено повернення']);
+  const issueBlockedAt=rozetkaTrackingEventDate_(text,['Заборона видачі']);
+  const refusedAt=rozetkaTrackingEventDate_(text,['Відмова одержувача','Відмова від одержання']);
+
+  // Do not classify by a bare translated label: the SPA can contain its whole
+  // dictionary in the HTML. A real event must have its timestamp next to it.
+  const returned=Boolean(returnedAtEvent);
+  const waitingSender=Boolean(waitingSenderAt);
+  const returnBranch=Boolean(returnBranchAt);
+  const returning=Boolean(returningAt);
+  const returnCreated=Boolean(returnCreatedAt);
+  const refused=Boolean(refusedAt);
+  const issueBlocked=Boolean(issueBlockedAt);
+  const hasReturn=returned||waitingSender||returnBranch||returning||returnCreated||refused||issueBlocked;
+  const isReturn=hasReturn||knownReturn;
+
+  let statusText='Rozetka Delivery';
+  let statusCode='OTHER';
+  if(returned){ statusText='Повернуто'; statusCode='RETURNED'; }
+  else if(waitingSender){ statusText='Очікує відправника'; statusCode='RETURN_READY'; }
+  else if(returnBranch){ statusText='У відділенні повернення'; statusCode='RETURN_BRANCH'; }
+  else if(returning){ statusText='Повертається'; statusCode='RETURNING'; }
+  else if(returnCreated){ statusText='Оформлено повернення'; statusCode='RETURN_CREATED'; }
+  else if(issueBlocked){ statusText='Заборона видачі'; statusCode='ISSUE_BLOCKED'; }
+  else if(refused){ statusText='Відмова одержувача'; statusCode='REFUSED'; }
+  else if(rozetkaTrackingEventDate_(text,['У відділенні доставки'])){ statusText='У відділенні доставки'; statusCode='DELIVERY_BRANCH'; }
+  else if(rozetkaTrackingEventDate_(text,['В дорозі'])){ statusText='В дорозі'; statusCode='TRANSIT'; }
+  else if(rozetkaTrackingEventDate_(text,['Прийнято на відправку'])){ statusText='Прийнято на відправку'; statusCode='ACCEPTED'; }
+  else if(rozetkaTrackingEventDate_(text,['Заплановано до відправки'])){ statusText='Заплановано до відправки'; statusCode='PLANNED'; }
+
+  const arrived=isReturn&&(returned||waitingSender||returnBranch);
+  const returnStartedAt=returningAt||returnCreatedAt||issueBlockedAt||refusedAt||
+    (isReturn&&context&&context.returnStartedAt?context.returnStartedAt:'');
+  const arrivedAt=arrived?(returnedAtEvent||waitingSenderAt||returnBranchAt||new Date().toISOString()):'';
+
+  return {
+    source:'Rozetka Delivery',
+    authoritative:true,
+    statusText:statusText,
+    statusCode:statusCode,
+    isReturn:isReturn,
+    returnStartedAt:isReturn?(returnStartedAt||new Date().toISOString()):'',
+    arrivedAt:arrivedAt,
+    carrierDelivered:Boolean(returned),
+    originalTtn:String(context&&context.originalTtn||context&&context.ttn||queried).trim(),
+    returnTtn:isReturn?queried:'',
+    raw:{url:url,text:text.slice(0,6000)}
+  };
+}
+
+function rozetkaTrackingText_(html){
+  let text=String(html||'');
+  text=text.replace(/\\u([0-9a-fA-F]{4})/g,function(_,hex){
+    return String.fromCharCode(parseInt(hex,16));
+  });
+  text=text.replace(/\\n|\\r|\\t/g,' ');
+  text=text
+    .replace(/&nbsp;|&#160;/gi,' ')
+    .replace(/&quot;|&#34;/gi,'"')
+    .replace(/&apos;|&#39;/gi,"'")
+    .replace(/&lt;/gi,'<')
+    .replace(/&gt;/gi,'>')
+    .replace(/&amp;/gi,'&');
+  text=text.replace(/<[^>]+>/g,' ');
+  return text.replace(/\s+/g,' ').trim();
+}
+
+function rozetkaTrackingEventDate_(text,labels){
+  const source=String(text||'');
+  for(let i=0;i<(labels||[]).length;i++){
+    const label=String(labels[i]||'');
+    if(!label) continue;
+    const escaped=label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const match=source.match(new RegExp(escaped+'[\\s\\S]{0,600}?(\\d{2}\\.\\d{2}\\.\\d{4}\\s+\\d{2}:\\d{2})','i'));
+    if(match&&match[1]){
+      const iso=dateIso_(match[1]);
+      if(iso) return iso;
+    }
+  }
+  return '';
 }
 
 function cleanBearer_(value){
