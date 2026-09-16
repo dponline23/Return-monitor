@@ -7,15 +7,16 @@ function refreshTracking_(){
 
   rows.forEach(row=>{
     try{
-      const rawTrackingTtn=String(row.returnTtn||row.ttn||'').trim();
+      const resolved=resolveReturnTrackingLeg_(row);
+      const rawTrackingTtn=String(resolved.ttn||'').trim();
       if(!rawTrackingTtn){ skipped++; return; }
-      const carrier=inferCarrierFromTrackingNumber_(rawTrackingTtn,row.carrier);
+      const carrier=resolved.carrier||inferCarrierFromTrackingNumber_(rawTrackingTtn,row.carrier);
       const trackingTtn=canonicalTrackingNumber_(carrier,rawTrackingTtn);
-      const result=trackShipment_(carrier,trackingTtn,row);
+      const result=resolved.result||trackShipment_(carrier,trackingTtn,row);
       if(!result||result.skipped){ skipped++; return; }
       result.ttn=trackingTtn;
-      result.originalTtn=canonicalTrackingNumber_(inferCarrierFromTrackingNumber_(row.originalTtn||row.ttn,row.carrier),result.originalTtn||row.originalTtn||row.ttn||'');
-      result.returnTtn=canonicalTrackingNumber_(carrier,result.returnTtn||row.returnTtn||(result.isReturn?trackingTtn:''));
+      result.originalTtn=canonicalTrackingNumber_(inferCarrierFromTrackingNumber_(row.ttn||row.originalTtn,row.carrier),result.originalTtn||row.ttn||row.originalTtn||'');
+      result.returnTtn=canonicalTrackingNumber_(carrier,result.returnTtn||trackingTtn||row.returnTtn||'');
       checked++;
       applyCarrierTracking_(row,result);
       updated++;
@@ -25,6 +26,31 @@ function refreshTracking_(){
     }
   });
   return {ok:errors===0,checked:checked,updated:updated,skipped:skipped,errors:errors,novaDiscovery:novaDiscovery};
+}
+
+function resolveReturnTrackingLeg_(row){
+  const fallbackTtn=String(row&&row.returnTtn||row&&row.ttn||'').trim();
+  const fallbackCarrier=inferCarrierFromTrackingNumber_(fallbackTtn,row&&row.carrier);
+
+  const outbound=canonicalTrackingNumber_('Нова Пошта',row&&row.ttn||'');
+  const storedReturn=canonicalTrackingNumber_('Нова Пошта',row&&row.returnTtn||'');
+  const storedOriginal=canonicalTrackingNumber_('Нова Пошта',row&&row.originalTtn||'');
+
+  // Legacy repair: older Easy Return discovery could swap the pair so that
+  // returnTtn pointed back to the already-delivered SalesDrive EW. The document
+  // tracker keeps OUTBOUND and RETURN as separate tracks; do the same here.
+  if(/^\d{14}$/.test(outbound)&&storedReturn===outbound&&/^\d{14}$/.test(storedOriginal)&&storedOriginal!==outbound){
+    const probe=trackNovaPoshta_(storedOriginal,row);
+    const lightPrimary=canonicalTrackingNumber_('Нова Пошта',probe&&probe.raw?probe.raw.LightReturnNumber:'');
+    if(lightPrimary===outbound){
+      probe.isReturn=true;
+      probe.originalTtn=outbound;
+      probe.returnTtn=storedOriginal;
+      return {ttn:storedOriginal,carrier:'Нова Пошта',result:probe,repaired:true};
+    }
+  }
+
+  return {ttn:fallbackTtn,carrier:fallbackCarrier,result:null,repaired:false};
 }
 
 function inferCarrierFromTrackingNumber_(ttn,fallback){
