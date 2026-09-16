@@ -208,111 +208,96 @@ function trackRozetkaDelivery_(ttn,context){
   const queried=String(ttn||'').trim();
   if(!queried) return {skipped:true,source:'Rozetka Delivery',reason:'Tracking number missing'};
 
-  const url='https://rozetka.delivery/tracking/parcel?parcel_id='+encodeURIComponent(queried);
-  const response=UrlFetchApp.fetch(url,{
-    method:'get',
-    muteHttpExceptions:true,
-    followRedirects:true,
-    headers:{
-      Accept:'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
-      'Accept-Language':'uk-UA,uk;q=0.9',
-      'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/152 Safari/537.36'
+  const query='?id='+encodeURIComponent(queried)+'&sort=asc';
+  const urls=[
+    'https://rz-delivery.rozetka.ua/api/track/status-group'+query,
+    'https://rozetka.delivery/api/track/status-group'+query
+  ];
+  let json=null,usedUrl='',lastError='';
+
+  for(let i=0;i<urls.length;i++){
+    try{
+      const response=UrlFetchApp.fetch(urls[i],{
+        method:'get',
+        muteHttpExceptions:true,
+        followRedirects:true,
+        headers:{
+          Accept:'application/json,text/plain,*/*',
+          'Content-Language':'uk',
+          'Accept-Language':'uk-UA,uk;q=0.9',
+          Referer:'https://rozetka.delivery/'
+        }
+      });
+      const code=response.getResponseCode();
+      const text=response.getContentText('UTF-8');
+      let candidate=null;
+      try{candidate=JSON.parse(text||'{}');}catch(_){candidate=null;}
+      if(code>=200&&code<300&&candidate&&Array.isArray(candidate.data)&&candidate.data.length){
+        json=candidate;
+        usedUrl=urls[i];
+        break;
+      }
+      lastError='HTTP '+code+(candidate&&candidate.message?' · '+candidate.message:'');
+    }catch(error){
+      lastError=error&&error.message?error.message:String(error);
     }
-  });
-  const httpCode=response.getResponseCode();
-  const html=response.getContentText('UTF-8');
-  if(httpCode<200||httpCode>=300){
-    throw new Error('Rozetka Delivery HTTP '+httpCode+': '+String(html||'').replace(/\s+/g,' ').slice(0,180));
   }
 
-  const text=rozetkaTrackingText_(html);
-  if(!text) return {skipped:true,source:'Rozetka Delivery',reason:'Empty tracking page'};
+  if(!json) return {skipped:true,source:'Rozetka Delivery',reason:'Public tracking unavailable'+(lastError?' · '+lastError:'')};
 
+  const normalizedQuery=normalizeTrackingNumber_(queried);
+  const item=json.data.find(entry=>normalizeTrackingNumber_(entry&&entry.track_id||'')===normalizedQuery)||(json.data[0]||{});
+  const groups=Array.isArray(item.status_groups)?item.status_groups:[];
+  const events=[];
+  groups.forEach(group=>{
+    (Array.isArray(group&&group.statuses)?group.statuses:[]).forEach(status=>{
+      events.push({
+        id:Number(status&&status.id||0),
+        name:compactText_(status&&status.name||''),
+        date:dateIso_(status&&status.date||''),
+        groupId:Number(group&&group.id||0),
+        groupName:compactText_(group&&group.name||''),
+        location:status&&status.location?status.location:null
+      });
+    });
+  });
+
+  events.sort((a,b)=>{
+    const ad=parseDate_(a.date),bd=parseDate_(b.date);
+    if(ad&&bd) return ad-bd;
+    return 0;
+  });
+
+  const rawLast=item&&item.last_status?item.last_status:{};
+  const lastId=Number(rawLast.id||0)||(events.length?events[events.length-1].id:0);
+  const lastName=compactText_(rawLast.name||'')||(events.length?events[events.length-1].name:'');
+  const lastDate=dateIso_(rawLast.date||'')||(events.length?events[events.length-1].date:'');
+
+  const eventById=id=>events.find(event=>event.id===id)||null;
+  const firstReturnEvent=events.find(event=>[40050,40060,50011,50013,50015,50020,60040].indexOf(event.id)>=0)||null;
+  const arrivalEvent=eventById(50020)||eventById(60040);
   const knownReturn=Boolean(context&&context.returnNumber);
-  const returnedAtEvent=rozetkaTrackingEventDate_(text,['Повернуто']);
-  const waitingSenderAt=rozetkaTrackingEventDate_(text,['Очікує відправника']);
-  const returnBranchAt=rozetkaTrackingEventDate_(text,['У відділенні повернення']);
-  const returningAt=rozetkaTrackingEventDate_(text,['Повертається']);
-  const returnCreatedAt=rozetkaTrackingEventDate_(text,['Оформлено повернення']);
-  const issueBlockedAt=rozetkaTrackingEventDate_(text,['Заборона видачі']);
-  const refusedAt=rozetkaTrackingEventDate_(text,['Відмова одержувача','Відмова від одержання']);
+  const returnDetected=knownReturn||Boolean(firstReturnEvent)||groups.some(group=>[600,700,1000,1100,1300].indexOf(Number(group&&group.id||0))>=0);
+  const arrived=[50020,60040].indexOf(lastId)>=0||Boolean(arrivalEvent&&[50020,60040].indexOf(arrivalEvent.id)>=0&&[50011,50013,50015].indexOf(lastId)<0);
 
-  // Do not classify by a bare translated label: the SPA can contain its whole
-  // dictionary in the HTML. A real event must have its timestamp next to it.
-  const returned=Boolean(returnedAtEvent);
-  const waitingSender=Boolean(waitingSenderAt);
-  const returnBranch=Boolean(returnBranchAt);
-  const returning=Boolean(returningAt);
-  const returnCreated=Boolean(returnCreatedAt);
-  const refused=Boolean(refusedAt);
-  const issueBlocked=Boolean(issueBlockedAt);
-  const hasReturn=returned||waitingSender||returnBranch||returning||returnCreated||refused||issueBlocked;
-  const isReturn=hasReturn||knownReturn;
-
-  let statusText='Rozetka Delivery';
-  let statusCode='OTHER';
-  if(returned){ statusText='Повернуто'; statusCode='RETURNED'; }
-  else if(waitingSender){ statusText='Очікує відправника'; statusCode='RETURN_READY'; }
-  else if(returnBranch){ statusText='У відділенні повернення'; statusCode='RETURN_BRANCH'; }
-  else if(returning){ statusText='Повертається'; statusCode='RETURNING'; }
-  else if(returnCreated){ statusText='Оформлено повернення'; statusCode='RETURN_CREATED'; }
-  else if(issueBlocked){ statusText='Заборона видачі'; statusCode='ISSUE_BLOCKED'; }
-  else if(refused){ statusText='Відмова одержувача'; statusCode='REFUSED'; }
-  else if(rozetkaTrackingEventDate_(text,['У відділенні доставки'])){ statusText='У відділенні доставки'; statusCode='DELIVERY_BRANCH'; }
-  else if(rozetkaTrackingEventDate_(text,['В дорозі'])){ statusText='В дорозі'; statusCode='TRANSIT'; }
-  else if(rozetkaTrackingEventDate_(text,['Прийнято на відправку'])){ statusText='Прийнято на відправку'; statusCode='ACCEPTED'; }
-  else if(rozetkaTrackingEventDate_(text,['Заплановано до відправки'])){ statusText='Заплановано до відправки'; statusCode='PLANNED'; }
-
-  const arrived=isReturn&&(returned||waitingSender||returnBranch);
-  const returnStartedAt=returningAt||returnCreatedAt||issueBlockedAt||refusedAt||
-    (isReturn&&context&&context.returnStartedAt?context.returnStartedAt:'');
-  const arrivedAt=arrived?(returnedAtEvent||waitingSenderAt||returnBranchAt||new Date().toISOString()):'';
+  const knownStatusIds=[10010,10020,10030,10040,10070,20010,20020,30010,40040,40050,40060,50011,50013,50015,50020,60040];
+  if(knownStatusIds.indexOf(lastId)<0){
+    return {skipped:true,source:'Rozetka Delivery',reason:'Unmapped Rozetka status '+String(lastId||'')+' '+lastName,raw:{url:usedUrl,item:item}};
+  }
 
   return {
     source:'Rozetka Delivery',
     authoritative:true,
-    statusText:statusText,
-    statusCode:statusCode,
-    isReturn:isReturn,
-    returnStartedAt:isReturn?(returnStartedAt||new Date().toISOString()):'',
-    arrivedAt:arrivedAt,
-    carrierDelivered:Boolean(returned),
+    statusText:lastName||('Rozetka Delivery · '+lastId),
+    statusCode:String(lastId),
+    isReturn:returnDetected,
+    returnStartedAt:returnDetected?((firstReturnEvent&&firstReturnEvent.date)||(context&&context.returnStartedAt)||lastDate||new Date().toISOString()):'',
+    arrivedAt:returnDetected&&arrived?((arrivalEvent&&arrivalEvent.date)||lastDate||new Date().toISOString()):'',
+    carrierDelivered:lastId===60040,
     originalTtn:String(context&&context.originalTtn||context&&context.ttn||queried).trim(),
-    returnTtn:isReturn?queried:'',
-    raw:{url:url,text:text.slice(0,6000)}
+    returnTtn:returnDetected?queried:'',
+    raw:{url:usedUrl,last_status:rawLast,status_groups:groups}
   };
-}
-
-function rozetkaTrackingText_(html){
-  let text=String(html||'');
-  text=text.replace(/\\u([0-9a-fA-F]{4})/g,function(_,hex){
-    return String.fromCharCode(parseInt(hex,16));
-  });
-  text=text.replace(/\\n|\\r|\\t/g,' ');
-  text=text
-    .replace(/&nbsp;|&#160;/gi,' ')
-    .replace(/&quot;|&#34;/gi,'"')
-    .replace(/&apos;|&#39;/gi,"'")
-    .replace(/&lt;/gi,'<')
-    .replace(/&gt;/gi,'>')
-    .replace(/&amp;/gi,'&');
-  text=text.replace(/<[^>]+>/g,' ');
-  return text.replace(/\s+/g,' ').trim();
-}
-
-function rozetkaTrackingEventDate_(text,labels){
-  const source=String(text||'');
-  for(let i=0;i<(labels||[]).length;i++){
-    const label=String(labels[i]||'');
-    if(!label) continue;
-    const escaped=label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    const match=source.match(new RegExp(escaped+'[\\s\\S]{0,600}?(\\d{2}\\.\\d{2}\\.\\d{4}\\s+\\d{2}:\\d{2})','i'));
-    if(match&&match[1]){
-      const iso=dateIso_(match[1]);
-      if(iso) return iso;
-    }
-  }
-  return '';
 }
 
 function cleanBearer_(value){
