@@ -7,8 +7,10 @@ function discoverNovaPoshtaReturns_(){
   const maxAgeMs=21*86400000;
   const rows=readReturnRows_().filter(row=>{
     if(String(row.source||'').toLowerCase()!=='salesdrive') return false;
-    const ttn=normalizeTrackingNumber_(row.originalTtn||row.ttn||'');
-    if(!/^\d{14}$/.test(ttn)) return false;
+    const numbers=[row.ttn,row.originalTtn,row.returnTtn]
+      .map(value=>normalizeTrackingNumber_(value||''))
+      .filter(value=>/^\d{14}$/.test(value));
+    if(!numbers.length) return false;
     const date=parseDate_(row.orderDate||row.createdAt||row.updatedAt);
     return !date||now-date.getTime()<=maxAgeMs;
   }).sort((a,b)=>{
@@ -19,49 +21,50 @@ function discoverNovaPoshtaReturns_(){
   const parentNumbers=[];
   const seenParents=new Set();
   rows.forEach(row=>{
-    const n=normalizeTrackingNumber_(row.originalTtn||row.ttn||'');
-    if(!n||seenParents.has(n)) return;
-    seenParents.add(n);parentNumbers.push(n);
+    [row.ttn,row.originalTtn,row.returnTtn].forEach(value=>{
+      const n=normalizeTrackingNumber_(value||'');
+      if(!/^\d{14}$/.test(n)||seenParents.has(n)) return;
+      seenParents.add(n);parentNumbers.push(n);
+    });
   });
-  const parentItems=parentNumbers.length?novaPoshtaStatusBatch_(key,parentNumbers):[];
-  const parentByNumber=novaStatusMap_(parentItems);
 
-  const childNumbers=[];
-  const seenChildren=new Set();
+  const parentItems=parentNumbers.length?novaPoshtaStatusBatch_(key,parentNumbers):[];
+  const linkedNumbers=[];
+  const seenLinked=new Set(parentNumbers);
   parentItems.forEach(item=>{
-    const parent=novaStatusNumber_(item);
-    const child=normalizeTrackingNumber_(firstValue_(item,['LastCreatedOnTheBasisNumber','lastCreatedOnTheBasisNumber'])||'');
-    if(!child||child===parent||seenChildren.has(child)) return;
-    seenChildren.add(child);childNumbers.push(child);
+    [
+      firstValue_(item,['LastCreatedOnTheBasisNumber','lastCreatedOnTheBasisNumber']),
+      firstValue_(item,['LightReturnNumber','lightReturnNumber'])
+    ].forEach(value=>{
+      const n=normalizeTrackingNumber_(value||'');
+      if(!/^\d{14}$/.test(n)||seenLinked.has(n)) return;
+      seenLinked.add(n);linkedNumbers.push(n);
+    });
   });
-  const childItems=novaPoshtaStatusBatch_(key,childNumbers);
-  const childByNumber=novaStatusMap_(childItems);
+  const linkedItems=linkedNumbers.length?novaPoshtaStatusBatch_(key,linkedNumbers):[];
+  const statusByNumber=novaStatusMap_(parentItems.concat(linkedItems));
 
   let returnsFound=0,updated=0,redirections=0,ambiguous=0,easyKnown=0;
   rows.forEach(row=>{
-    const parentNumber=normalizeTrackingNumber_(row.originalTtn||row.ttn||'');
-    const parent=parentByNumber.get(parentNumber);
-    if(!parent) return;
-
-    // Easy Return is reported on the INCOMING return EW itself.
-    // LightReturnNumber contains the PRIMARY outbound EW.
-    const lightPrimary=normalizeTrackingNumber_(firstValue_(parent,['LightReturnNumber','lightReturnNumber'])||'');
-    if(lightPrimary&&lightPrimary!==parentNumber){
-      const result=novaTrackingResultFromItem_(parent,parentNumber,row);
+    const easyPair=novaEasyReturnPairForRow_(row,statusByNumber);
+    if(easyPair){
+      const result=novaTrackingResultFromItem_(easyPair.item,easyPair.returnTtn,row);
       result.isReturn=true;
-      result.originalTtn=lightPrimary;
-      result.returnTtn=parentNumber;
+      result.originalTtn=easyPair.originalTtn;
+      result.returnTtn=easyPair.returnTtn;
       result.distinctReturnLeg=true;
-      if(!result.returnStartedAt){
-        result.returnStartedAt=dateIso_(firstValue_(parent,['DateCreated','DateScan','ScheduledDeliveryDate']))||row.returnStartedAt||new Date().toISOString();
-      }
+      result.returnStartedAt=dateIso_(firstValue_(easyPair.item,['DateCreated','DateScan','ScheduledDeliveryDate']))||result.returnStartedAt||new Date().toISOString();
       novaApplyDiscoveredReturn_(row,result);
       returnsFound++;updated++;easyKnown++;
       return;
     }
 
+    const parentNumber=normalizeTrackingNumber_(row.originalTtn||row.ttn||'');
+    const parent=statusByNumber.get(parentNumber);
+    if(!parent) return;
+
     const childNumber=normalizeTrackingNumber_(firstValue_(parent,['LastCreatedOnTheBasisNumber','lastCreatedOnTheBasisNumber'])||'');
-    const child=childNumber?childByNumber.get(childNumber):null;
+    const child=childNumber?statusByNumber.get(childNumber):null;
     const relation=novaReturnRelation_(parent,child,parentNumber,childNumber);
     const direct=novaStatusIsExplicitReturn_(parent);
 
@@ -101,7 +104,64 @@ function discoverNovaPoshtaReturns_(){
   returnsFound+=Number(easyReturn&&easyReturn.returnsFound||0);
   updated+=Number(easyReturn&&easyReturn.updated||0);
 
-  return {ok:true,checked:parentNumbers.length,children:childNumbers.length,returnsFound:returnsFound,updated:updated,redirections:redirections,ambiguous:ambiguous,easyKnown:easyKnown,easyReturn:easyReturn,imagesMirrored:imageMirror.updated||0,imageErrors:imageMirror.errors||0};
+  return {ok:true,checked:parentNumbers.length,linked:linkedNumbers.length,returnsFound:returnsFound,updated:updated,redirections:redirections,ambiguous:ambiguous,easyKnown:easyKnown,easyReturn:easyReturn,imagesMirrored:imageMirror.updated||0,imageErrors:imageMirror.errors||0};
+}
+
+function novaEasyReturnPairForRow_(row,statusByNumber){
+  const shipmentTtn=normalizeTrackingNumber_(row&&row.ttn||'');
+  const candidates=[];
+  const seen=new Set();
+  [row&&row.ttn,row&&row.originalTtn,row&&row.returnTtn].forEach(value=>{
+    const n=normalizeTrackingNumber_(value||'');
+    if(!/^\d{14}$/.test(n)||seen.has(n)) return;
+    seen.add(n);candidates.push(n);
+  });
+
+  // Include the linked EN as a candidate as well. This repairs rows where an
+  // earlier version accidentally swapped originalTtn and returnTtn.
+  candidates.slice().forEach(number=>{
+    const item=statusByNumber.get(number);
+    if(!item) return;
+    const linked=normalizeTrackingNumber_(firstValue_(item,['LightReturnNumber','lightReturnNumber'])||'');
+    if(/^\d{14}$/.test(linked)&&!seen.has(linked)){
+      seen.add(linked);candidates.push(linked);
+    }
+  });
+
+  let best=null;
+  candidates.forEach(number=>{
+    const item=statusByNumber.get(number);
+    if(!item) return;
+    const linked=normalizeTrackingNumber_(firstValue_(item,['LightReturnNumber','lightReturnNumber'])||'');
+    if(!linked||linked===number) return;
+
+    let score=0;
+    // The shipment TTN from SalesDrive is the strongest evidence for the
+    // primary outbound leg. The Easy Return EN should point back to it.
+    if(shipmentTtn&&linked===shipmentTtn) score+=100;
+    if(shipmentTtn&&number!==shipmentTtn) score+=20;
+    if(normalizeTrackingNumber_(row&&row.returnTtn||'')===number&&number!==shipmentTtn) score+=10;
+
+    const linkedItem=statusByNumber.get(linked)||null;
+    const returnDate=parseDate_(firstValue_(item,['DateCreated','DateScan','ScheduledDeliveryDate']));
+    const primaryDate=linkedItem?parseDate_(firstValue_(linkedItem,['DateCreated','DateScan','ScheduledDeliveryDate'])):null;
+    if(returnDate&&primaryDate&&returnDate.getTime()>=primaryDate.getTime()) score+=20;
+
+    const returnCode=String(firstValue_(item,['StatusCode','statusCode'])||'');
+    const primaryCode=linkedItem?String(firstValue_(linkedItem,['StatusCode','statusCode'])||''):'';
+    const returnDelivered=/^(9|10|11)$/.test(returnCode);
+    const primaryDelivered=/^(9|10|11)$/.test(primaryCode);
+    if(primaryDelivered&&!returnDelivered) score+=20;
+    if(returnDelivered&&!primaryDelivered) score-=20;
+
+    if(!best||score>best.score){
+      best={score:score,originalTtn:linked,returnTtn:number,item:item};
+    }
+  });
+
+  // Do not promote an ambiguous one-sided LightReturnNumber relation. We need
+  // either a direct match to the SalesDrive shipment or corroborating evidence.
+  return best&&best.score>=50?best:null;
 }
 
 function novaDiscoverEasyReturns_(apiKey,rows){
@@ -258,8 +318,6 @@ function novaPoshtaIncomingDocumentNumbers_(apiKey,daysBack){
     if(!data.length||data.length<100) break;
   }
 
-  // Fallback for accounts where getDocumentList needs an explicit recipient ref.
-  // Exact LightReturnNumber matching below still prevents unrelated shipments.
   if(numbers.length<600){
     let refs=[];
     try{refs=novaPoshtaOwnSenderRefs_(apiKey);}catch(_){refs=[];}
@@ -306,9 +364,6 @@ function novaPoshtaApiRequest_(apiKey,modelName,calledMethod,methodProperties){
 }
 
 function novaApplyDiscoveredReturn_(row,result){
-  // Old versions could mark the ORIGINAL outbound shipment as "supplier picked up"
-  // before the distinct return EN was discovered. Repair only that stale case.
-  // Carrier delivery itself must NEVER set supplierPickedUp.
   if(result&&result.distinctReturnLeg&&row&&row.id){
     const fresh=findReturnByIdFast_(row.id);
     if(fresh){
